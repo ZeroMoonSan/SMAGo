@@ -663,3 +663,76 @@
 2026/06/17 01:37:05 upgrade: smoke-testing new binary
 2026/06/17 01:37:10 upgrade: asking supervisor to swap to 9b88c7a
 2026/06/17 01:37:10 upgrade: signal sent, supervisor will swap
+2026/06/17 01:37:17 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:37:17 telegram: dialing api.telegram.org...
+2026/06/17 01:37:17 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:37:18 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:37:18 mcp: connecting to playwright ...
+2026/06/17 01:37:20 mcp playwright: connected (Playwright)
+2026/06/17 01:37:21 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:37:21 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:37:21 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:37:21 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:37:21 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:37:21 ready: long-polling for updates...
+2026/06/17 01:37:32 msg: chatID=1055198077 text="наконец всё заработало и какая всё же версия?"
+2026/06/17 01:38:40 reply: chatID=1055198077 "Версия 2e2b238, PID 18012, uptime 55s — уже на новом бинарнике.\n\nЕсли всё ещё видишь грузные звёздочки в Telegram, скажи — я сра\xd0…"
+2026/06/17 01:43:47 msg: chatID=1055198077 text="███████╗███████╗██╗     ███████╗                                      \n██╔════╝██╔════╝██║     ██╔═\xe2…"
+2026/06/17 01:46:26 upgrade: git HEAD = 2d94813
+2026/06/17 01:46:26 upgrade: building data\versions\2e2b238\agent.exe from .
+2026/06/17 01:46:29 upgrade: smoke-testing new binary
+2026/06/17 01:46:35 upgrade: asking supervisor to swap to 2e2b238
+2026/06/17 01:46:35 upgrade: signal sent, supervisor will swap
+2026/06/17 01:46:41 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:46:41 telegram: dialing api.telegram.org...
+2026/06/17 01:46:42 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:46:42 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:46:42 mcp: connecting to playwright ...
+2026/06/17 01:46:45 mcp playwright: connected (Playwright)
+2026/06/17 01:46:45 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:46:45 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:46:45 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:46:45 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:46:45 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:46:45 ready: long-polling for updates...
+2026/06/17 01:47:13 shutdown signal
+2026/06/17 01:47:13 mcp[playwright] ^C
+2026/06/17 01:47:15 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:47:15 telegram: dialing api.telegram.org...
+2026/06/17 01:47:16 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:47:16 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:47:16 mcp: connecting to playwright ...
+2026/06/17 01:47:19 mcp playwright: connected (Playwright)
+2026/06/17 01:47:19 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:47:19 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:47:19 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:47:19 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:47:19 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:47:19 ready: long-polling for updates...
+2026/06/17 01:47:20 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:47:20 telegram: dialing api.telegram.org...
+2026/06/17 01:47:21 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:47:21 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:47:21 mcp: connecting to playwright ...
+2026/06/17 01:47:24 mcp playwright: connected (Playwright)
+2026/06/17 01:47:24 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:47:24 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:47:24 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:47:24 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:47:24 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:47:24 ready: long-polling for updates...
+2026/06/17 01:47:24 inject server: listen tcp 127.0.0.1:7777: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2026/06/17 01:47:43 msg: chatID=1055198077 text="ты не поменял баннер :("
+2026/06/17 01:53:03 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:53:03 telegram: dialing api.telegram.org...
+2026/06/17 01:53:04 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:53:04 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:53:04 mcp: connecting to playwright ...
+2026/06/17 01:53:07 mcp playwright: connected (Playwright)
+2026/06/17 01:53:07 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:53:07 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:53:07 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:53:07 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:53:07 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:53:07 ready: long-polling for updates...
+2026/06/17 01:54:44 msg: chatID=1055198077 text="я сам поменял баннер, пересобери"

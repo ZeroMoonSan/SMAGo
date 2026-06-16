@@ -44,7 +44,7 @@ func run() error {
 	logLaunchFlags()
 
 	enableWindowsVT()
-	printBanner(version)
+	printBanner(version, os.Stderr)
 
 	cfgPath, err := findConfig()
 	if err != nil {
