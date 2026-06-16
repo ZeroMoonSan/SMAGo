@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -28,7 +29,7 @@ func (s *SelfModifyTool) Definition() ToolDef {
 				},
 				"version": map[string]any{
 					"type":        "string",
-					"description": "For upgrade/rollback: target version as git SHA prefix (e.g. 'cff3262').",
+					"description": "For upgrade/rollback: target version as git SHA prefix.",
 				},
 				"force": map[string]any{
 					"type":        "boolean",
@@ -92,16 +93,11 @@ func (s *SelfModifyTool) actionList() (string, error) {
 }
 
 func (s *SelfModifyTool) actionCurrent() (string, error) {
-	buildVer := flagValue("--smago-version")
-	if buildVer == "" {
-		buildVer = readCurrentVersion()
-	}
 	sha, _ := gitHead()
 	exe, _ := os.Executable()
 	exe = filepath.Base(exe)
 	uptime := time.Since(startedAt).Truncate(time.Second)
 	var b strings.Builder
-	fmt.Fprintf(&b, "build: %s\n", buildVer)
 	fmt.Fprintf(&b, "git:  %s\n", sha)
 	fmt.Fprintf(&b, "exe:  %s\n", exe)
 	fmt.Fprintf(&b, "pid:  %d\n", os.Getpid())
@@ -109,10 +105,16 @@ func (s *SelfModifyTool) actionCurrent() (string, error) {
 	return b.String(), nil
 }
 
+// writeRestartMsg saves a message to be shown after restart.
+func writeRestartMsg(chatID int64, msg string) {
+	data := map[string]any{"chat_id": chatID, "message": msg}
+	b, _ := json.Marshal(data)
+	_ = os.WriteFile("data/restart_msg.json", b, 0644)
+}
+
 func (s *SelfModifyTool) actionUpgrade(ctx context.Context, args map[string]any) (string, error) {
 	version, _ := args["version"].(string)
 	if version == "" {
-		// Use current git HEAD as the version.
 		sha, err := gitHead()
 		if err != nil {
 			return "", fmt.Errorf("git HEAD: %w", err)

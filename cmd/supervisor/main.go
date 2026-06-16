@@ -1,24 +1,12 @@
 // supervisor watches the agent, swaps versions on demand, rolls back on crash.
 //
-// This program is THE thing that never changes — it's the safety net.
-// If you find yourself "improving" it, stop and write a new version of
-// the agent instead.
-//
-// Protocol (files under ./data):
-//   current.json  {"version": "v1"}        — what we're running right now
-//   next.json     {"version": "v2"}        — what to swap to on next cycle
-//   bad.json      {"version": "v3"}        — versions that crashed on boot
-//
 // HTTP API on 127.0.0.1:7778:
 //   POST /upgrade?v=vN    signal supervisor to swap on next cycle
+//   POST /rebuild         rebuild agent from source and swap
 //   GET  /health          return "ok"
-//
-// UI: system tray icon (smago.ico) with a menu (status / open log / quit).
-// No console window — the binary is built with -H windowsgui.
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -56,8 +44,6 @@ var (
 )
 
 func main() {
-	// Make sure we don't pop a console when the binary is built with
-	// -H windowsgui (it shouldn't, but be defensive).
 	runtime.LockOSThread()
 
 	mustExist("data")
@@ -66,8 +52,6 @@ func main() {
 	_ = os.WriteFile("data/supervisor.pid", []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove("data/supervisor.pid")
 
-	// Tray icon + menu in its own goroutine. systray.Run blocks.
-	// We initialise from the goroutine and exit cleanly via stopCh.
 	systray.Run(onReady, onExit)
 }
 
@@ -89,11 +73,11 @@ func onReady() {
 	versionItem.Disable()
 	systray.AddSeparator()
 
-	mLogs := systray.AddMenuItem("Open log", "open data\\smago.log in the default app")
-	mData := systray.AddMenuItem("Open data dir", "open the data directory in Explorer")
+	mLogs := systray.AddMenuItem("Open log", "open data\\smago.log")
+	mData := systray.AddMenuItem("Open data dir", "open data dir")
 	systray.AddSeparator()
-	mHealth := systray.AddMenuItem("Health check", "ping 127.0.0.1:7778/health")
-	mRestart := systray.AddMenuItem("Restart agent", "kill current agent, supervisor relaunches it")
+	mHealth := systray.AddMenuItem("Health check", "ping health")
+	mRestart := systray.AddMenuItem("Restart agent", "restart agent")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit supervisor", "stop everything")
 
@@ -120,11 +104,7 @@ func onReady() {
 	mQuit.Click(func() { systray.Quit() })
 }
 
-func onExit() {
-	close(stopCh)
-}
-
-func handleTrayClicks() {} // unused — kept for future
+func onExit() { close(stopCh) }
 
 func setStatus(s string) {
 	if statusItem != nil {
@@ -167,9 +147,46 @@ func runSupervisor() {
 		_, _ = w.Write([]byte("ok"))
 		setStatus("upgrade → " + v)
 	})
+
+	http.HandleFunc("/rebuild", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "POST only", 405)
+			return
+		}
+		setStatus("rebuilding from source...")
+		sha := gitShortHead()
+		if sha == "" {
+			http.Error(w, "git HEAD failed", 500)
+			return
+		}
+		outDir := "data/versions/" + sha
+		os.MkdirAll(outDir, 0755)
+		outPath := outDir + "/" + exeName
+
+		build := exec.Command("go", "build", "-o", outPath, ".")
+		build.Stdout = os.Stdout
+		build.Stderr = os.Stderr
+		build.Env = augmentPath(os.Environ())
+		if err := build.Run(); err != nil {
+			setStatus("build failed: " + err.Error())
+			http.Error(w, "build failed: "+err.Error(), 500)
+			return
+		}
+		_ = os.WriteFile(outDir+"/commit.txt", []byte(sha+"\n"), 0644)
+
+		select {
+		case upgradeCh <- sha:
+		default:
+			_ = os.WriteFile(nextFile, []byte(fmt.Sprintf(`{"version":%q}`, sha)), 0644)
+		}
+		_, _ = w.Write([]byte("rebuilt and swapping to " + sha))
+		setStatus("rebuilt → " + sha)
+	})
+
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
+
 	go func() {
 		if err := http.ListenAndServe(supervisorAddr, nil); err != nil {
 			log.Printf("supervisor: http: %v", err)
@@ -249,11 +266,7 @@ func runOne(target, exePath, current string) (string, bool) {
 		}
 		setStatus(fmt.Sprintf("%s crashed: %v", target, err))
 		if elapsed < crashWindow {
-			if target != current {
-				markBad(target)
-			} else {
-				markBad(target)
-			}
+			markBad(target)
 		}
 		return current, false
 
@@ -287,8 +300,7 @@ func augmentPath(env []string) []string {
 		`C:\Go\bin`,
 		`C:\Program Files (x86)\Go\bin`,
 	}
-	current := os.Getenv("PATH")
-	augmented := current
+	augmented := os.Getenv("PATH")
 	for _, p := range paths {
 		if !strings.Contains(strings.ToLower(augmented), strings.ToLower(p)) {
 			augmented = p + ";" + augmented
@@ -296,12 +308,19 @@ func augmentPath(env []string) []string {
 	}
 	out := make([]string, 0, len(env))
 	for _, e := range env {
-		if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
-			continue
+		if !strings.HasPrefix(strings.ToUpper(e), "PATH=") {
+			out = append(out, e)
 		}
-		out = append(out, e)
 	}
 	return append(out, "PATH="+augmented)
+}
+
+func gitShortHead() string {
+	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func readState(path string) string {
@@ -337,6 +356,3 @@ func mustExist(path string) {
 		log.Fatalf("supervisor: required path %s missing: %v", path, err)
 	}
 }
-
-// silence unused-import warning if context goes out of use later.
-var _ = context.Background
