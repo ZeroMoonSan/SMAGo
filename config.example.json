@@ -1,0 +1,36 @@
+{
+  "telegramToken": "PUT_YOUR_BOT_TOKEN_HERE",
+  "telegramChatID": 0,
+  "provider": "free-deepseek",
+  "defaultModel": "deepseek-default",
+  "dataDir": "./data",
+  "systemPrompt": "You are SMAGo, a self-modifying AI agent. Be concise. You have bash, read_file, write_file, list_dir tools. Working dir: ./data",
+  "providers": {
+    "llama-local": {
+      "name": "llama.cpp (Local)",
+      "baseURL": "http://127.0.0.1:8080/v1",
+      "apiKey": "",
+      "models": {
+        "local-model": { "name": "My Local Model" }
+      }
+    },
+    "arrayredes": {
+      "name": "ArrayRedes",
+      "baseURL": "http://arrayredes.ddns.net:54321/v1",
+      "apiKey": "",
+      "models": {
+        "spicyneuron/Kimi-K2.6-MLX-3.6bit": { "name": "Kimi K2.6 (3.6bit)" }
+      }
+    },
+    "free-deepseek": {
+      "name": "DeepSeek (Free)",
+      "baseURL": "http://127.0.0.1:8000/v1",
+      "apiKey": "",
+      "models": {
+        "deepseek-default": { "name": "V4 Flash" },
+        "deepseek-reasoner": { "name": "V4 Flash (thinking)" },
+        "deepseek-expert": { "name": "V4 Pro" }
+      }
+    }
+  }
+}

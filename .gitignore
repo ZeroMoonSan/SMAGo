@@ -1,0 +1,16 @@
+# Build artefacts
+smago.exe
+smago
+
+# Config with secrets
+config.json
+*.local.json
+
+# Runtime data
+data/sessions.db
+data/sessions.db-*
+data/versions/*
+
+# Editor
+.vscode/
+.idea/
