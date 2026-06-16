@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// cmdSmokeTest runs the agent's initialization path without Telegram, then
-// exits 0 if everything loads cleanly. Used to verify a freshly-built
-// version before swapping to it.
 func cmdSmokeTest() error {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("smoke: ")
@@ -35,7 +32,6 @@ func cmdSmokeTest() error {
 	proxyURL := detectAndApplyProxy()
 	setGlobalProxy(proxyURL)
 
-	// Try to construct everything.
 	llm, err := NewLLM(cfg)
 	if err != nil {
 		return fmt.Errorf("llm: %w", err)
@@ -73,8 +69,8 @@ func cmdSmokeTest() error {
 
 // cmdUpgrade builds a new agent binary, runs a smoke test, and asks the
 // supervisor to swap to it. Args:
-//   --version=vN         required, e.g. v2
-//   --source=path        optional, defaults to "." (the cwd)
+//   --version=SHA         git commit SHA (short or full)
+//   --source=path         optional, defaults to "."
 func cmdUpgrade(args []string) error {
 	var version, source string
 	for i := 0; i < len(args); i++ {
@@ -92,7 +88,7 @@ func cmdUpgrade(args []string) error {
 		}
 	}
 	if version == "" {
-		return fmt.Errorf("--version=vN required")
+		return fmt.Errorf("--version=SHA required")
 	}
 	if source == "" {
 		source = "."
@@ -105,7 +101,7 @@ func cmdUpgrade(args []string) error {
 	outPath := filepath.Join(outDir, "agent.exe")
 
 	// Step 0: commit current source so this version is associated with a
-	// specific git revision. The user can roll back to it later.
+	// specific git revision.
 	sha, commitErr := gitCommitAll("upgrade: build " + version)
 	if commitErr != nil {
 		log.Printf("upgrade: git commit failed (continuing): %v", commitErr)
@@ -116,7 +112,6 @@ func cmdUpgrade(args []string) error {
 
 	log.Printf("upgrade: building %s from %s", outPath, source)
 
-	// Step 1: build.
 	build := hiddenCmd("go", "build", "-o", outPath, source)
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
@@ -124,7 +119,6 @@ func cmdUpgrade(args []string) error {
 		return fmt.Errorf("build failed: %w", err)
 	}
 
-	// Step 2: smoke test — run the new binary briefly.
 	log.Printf("upgrade: smoke-testing new binary")
 	test := hiddenCmd(outPath, "smoke-test")
 	test.Stdout = os.Stdout
@@ -133,7 +127,6 @@ func cmdUpgrade(args []string) error {
 		return fmt.Errorf("smoke-test failed: %w", err)
 	}
 
-	// Step 3: tell supervisor to swap.
 	log.Printf("upgrade: asking supervisor to swap to %s", version)
 	resp, err := http.Post("http://127.0.0.1:7778/upgrade?v="+version, "", nil)
 	if err != nil {
@@ -144,9 +137,6 @@ func cmdUpgrade(args []string) error {
 	return nil
 }
 
-// runSelfUpgrade is called from the Telegram loop in a goroutine.
-// It shells out to a fresh `agent upgrade` invocation, captures combined
-// output, and returns it (along with any error).
 func runSelfUpgrade(version string) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -157,13 +147,6 @@ func runSelfUpgrade(version string) (string, error) {
 	return string(out), err
 }
 
-// cmdRollback reverts the working tree to a previously-built version's
-// commit and rebuilds the binary. The supervisor will pick the new
-// data/versions/vN/agent.exe up on its next swap.
-//
-// Flags:
-//   --version=vN  required
-//   --force       bypass the "working tree is dirty" guard
 func cmdRollback(args []string) error {
 	var version, source string
 	var force bool
@@ -184,7 +167,7 @@ func cmdRollback(args []string) error {
 		}
 	}
 	if version == "" {
-		return fmt.Errorf("--version=vN required")
+		return fmt.Errorf("--version=SHA required")
 	}
 	if source == "" {
 		source = "."
@@ -201,7 +184,6 @@ func cmdRollback(args []string) error {
 	}
 	log.Printf("rollback: target=%s commit=%s", version, sha)
 
-	// Guard: refuse to overwrite uncommitted tracked changes unless --force.
 	if !force {
 		dirty, err := gitTrackedDirty()
 		if err != nil {
@@ -232,7 +214,6 @@ func cmdRollback(args []string) error {
 		return fmt.Errorf("build failed: %w", err)
 	}
 
-	// Smoke-test the freshly-built binary.
 	log.Printf("rollback: smoke-testing new binary")
 	test := hiddenCmd(outPath, "smoke-test")
 	test.Stdout = os.Stdout
@@ -251,7 +232,6 @@ func cmdRollback(args []string) error {
 	return nil
 }
 
-// runSelfRollback is the Telegram-goroutine wrapper for cmdRollback.
 func runSelfRollback(version string, force bool) (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,10 +14,10 @@ import (
 )
 
 type ToolRegistry struct {
-	cfg       *Config
-	tools     map[string]ToolDef
-	browser   *BrowserTool
-	readFiles map[string]bool
+	cfg        *Config
+	tools      map[string]ToolDef
+	mcpClients []*MCPClient
+	readFiles  map[string]bool
 }
 
 type ToolDef struct {
@@ -38,7 +39,6 @@ func (r *ToolRegistry) registerDefaults() {
 	ws := &WebSearchTool{}
 	r.tools["web_search"] = ws.Definition()
 
-	// Self-modify: lets the LLM upgrade / rollback / restart itself.
 	r.tools["self_modify"] = (&SelfModifyTool{cfg: r.cfg}).Definition()
 
 	if v := r.cfg.Providers["opencode-go"]; v.BaseURL != "" || os.Getenv("SMAGO_OPENCODE_KEY") != "" {
@@ -60,8 +60,8 @@ func (r *ToolRegistry) registerDefaults() {
 		r.tools["vision"] = vt.Definition()
 	}
 
-	r.tools["bash"] = ToolDef{
-		Name:        "bash",
+	r.tools["terminal"] = ToolDef{
+		Name:        "terminal",
 		Description: "Run a shell command and return its output. Working directory: " + r.cfg.DataDir,
 		Parameters: map[string]any{
 			"type": "object",
@@ -70,7 +70,7 @@ func (r *ToolRegistry) registerDefaults() {
 			},
 			"required": []string{"command"},
 		},
-		Execute: r.execBash,
+		Execute: r.execTerminal,
 	}
 	r.tools["read_file"] = ToolDef{
 		Name:        "read_file",
@@ -124,6 +124,54 @@ func (r *ToolRegistry) registerDefaults() {
 		},
 		Execute: r.listDir,
 	}
+
+	r.connectMCPServers()
+}
+
+func (r *ToolRegistry) connectMCPServers() {
+	if len(r.cfg.MCP) == 0 {
+		return
+	}
+	for name, cfg := range r.cfg.MCP {
+		if !cfg.Enabled {
+			continue
+		}
+		log.Printf("mcp: connecting to %s ...", name)
+		client, err := NewMCPClient(name, cfg)
+		if err != nil {
+			log.Printf("mcp: ✗ %s failed: %v", name, err)
+			continue
+		}
+		r.mcpClients = append(r.mcpClients, client)
+
+		tools, err := client.ListTools()
+		if err != nil {
+			log.Printf("mcp: ✗ %s listTools: %v", name, err)
+			continue
+		}
+		log.Printf("mcp: ✓ %s — %d tool(s)", name, len(tools))
+
+		for _, mt := range tools {
+			toolName := name + "__" + mt.Name
+			mtCopy := mt
+			clientCopy := client
+			r.tools[toolName] = ToolDef{
+				Name:        toolName,
+				Description: mtCopy.Description,
+				Parameters:  mtCopy.InputSchema,
+				Execute: func(ctx context.Context, args map[string]any) (string, error) {
+					return clientCopy.CallTool(ctx, mtCopy.Name, args)
+				},
+			}
+		}
+	}
+}
+
+func (r *ToolRegistry) Close() {
+	for _, c := range r.mcpClients {
+		_ = c.Close()
+	}
+	r.mcpClients = nil
 }
 
 func (r *ToolRegistry) All() []ToolDef {
@@ -164,14 +212,11 @@ func (r *ToolRegistry) WasRead(path string) bool {
 	return r.readFiles[path]
 }
 
-func (r *ToolRegistry) execBash(ctx context.Context, args map[string]any) (string, error) {
+func (r *ToolRegistry) execTerminal(ctx context.Context, args map[string]any) (string, error) {
 	cmd, ok := args["command"].(string)
 	if !ok {
 		return "", fmt.Errorf("command must be a string")
 	}
-	// Derive a child context with our 30s cap on top of whatever the caller
-	// passed in. Cancelling the caller's ctx (via /abort) kills the command
-	// even if our 30s cap hasn't elapsed.
 	runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -184,8 +229,6 @@ func (r *ToolRegistry) execBash(ctx context.Context, args map[string]any) (strin
 	c.Dir = r.cfg.DataDir
 	out, err := c.CombinedOutput()
 	if err != nil {
-		// If the parent ctx was cancelled (e.g. /abort), surface a clean
-		// error so the agent loop can see it and stop.
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
@@ -316,7 +359,7 @@ func (r *ToolRegistry) editFile(ctx context.Context, args map[string]any) (strin
 		lines = result
 
 	default:
-		return "", fmt.Errorf("unknown action: %s (use replace, delete, or insert)", action)
+		return "", fmt.Errorf("unknown action: %s (use replace, delete or insert)", action)
 	}
 
 	newContent := strings.Join(lines, "\n")

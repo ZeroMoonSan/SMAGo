@@ -18,15 +18,16 @@ type Model struct {
 }
 
 type Config struct {
-	TelegramToken  string              `json:"telegramToken"`
-	TelegramChatID int64               `json:"telegramChatID"`
-	DefaultModel   string              `json:"defaultModel"`
-	Provider       string              `json:"provider"`
-	Providers      map[string]Provider `json:"providers"`
-	SystemPrompt   string              `json:"systemPrompt"`
-	DataDir        string              `json:"dataDir"`
-	TrustedChatIDs []int64             `json:"trustedChatIDs"`
-	MagickExe      string              `json:"magickExe"`
+	TelegramToken  string                     `json:"telegramToken"`
+	TelegramChatID int64                      `json:"telegramChatID"`
+	DefaultModel   string                     `json:"defaultModel"`
+	Provider       string                     `json:"provider"`
+	Providers      map[string]Provider        `json:"providers"`
+	MCP            map[string]MCPServerConfig  `json:"mcp"`
+	SystemPrompt   string                     `json:"systemPrompt"`
+	DataDir        string                     `json:"dataDir"`
+	TrustedChatIDs []int64                    `json:"trustedChatIDs"`
+	MagickExe      string                     `json:"magickExe"`
 }
 
 func LoadConfig(path string) (*Config, error) {

@@ -44,7 +44,6 @@ type TGUpdate struct {
 	} `json:"callback_query"`
 }
 
-// InlineButton is one button in an inline keyboard.
 type InlineButton struct {
 	Text         string `json:"text"`
 	CallbackData string `json:"callback_data,omitempty"`
@@ -160,8 +159,6 @@ func (t *Telegram) LongPoll(ctx context.Context) (*TGUpdate, error) {
 	return nil, ctx.Err()
 }
 
-// SendChatAction sends a chat action (typing, upload_photo, etc.) to indicate activity.
-// The action auto-expires after ~5 seconds on Telegram's side.
 func (t *Telegram) SendChatAction(chatID int64, action string) error {
 	v := url.Values{}
 	v.Set("chat_id", fmt.Sprintf("%d", chatID))
@@ -181,7 +178,6 @@ func (t *Telegram) SendChatAction(chatID int64, action string) error {
 	return nil
 }
 
-// Typing sends the "typing..." indicator to the chat.
 func (t *Telegram) Typing(chatID int64) error {
 	return t.SendChatAction(chatID, "typing")
 }
@@ -190,14 +186,24 @@ func (t *Telegram) Send(chatID int64, text string) error {
 	return t.SendButtons(chatID, text, nil)
 }
 
-// SendPlain sends raw text without HTML conversion (for code, logs, etc.).
 func (t *Telegram) SendPlain(chatID int64, text string) error {
+	return t.sendMessage(chatID, text, false)
+}
+
+func (t *Telegram) SendSilent(chatID int64, text string) error {
+	return t.sendMessage(chatID, text, true)
+}
+
+func (t *Telegram) sendMessage(chatID int64, text string, silent bool) error {
 	if len(text) > 4000 {
 		text = text[:4000] + "\n\n[...truncated]"
 	}
 	v := url.Values{}
 	v.Set("chat_id", fmt.Sprintf("%d", chatID))
 	v.Set("text", text)
+	if silent {
+		v.Set("disable_notification", "true")
+	}
 
 	req, err := http.NewRequest("POST",
 		"https://api.telegram.org/bot"+t.token+"/sendMessage", strings.NewReader(v.Encode()))
@@ -213,8 +219,6 @@ func (t *Telegram) SendPlain(chatID int64, text string) error {
 	return nil
 }
 
-// SendButtons sends a message with an optional inline keyboard.
-// `rows` is a slice of rows; each row is a slice of buttons.
 func (t *Telegram) SendButtons(chatID int64, text string, rows [][]InlineButton) error {
 	if len(text) > 4000 {
 		text = text[:4000] + "\n\n[...truncated]"
@@ -243,7 +247,6 @@ func (t *Telegram) SendButtons(chatID int64, text string, rows [][]InlineButton)
 	return nil
 }
 
-// AnswerCallback answers a callback query (dismiss the "loading" spinner on the button).
 func (t *Telegram) AnswerCallback(callbackID, text string) error {
 	v := url.Values{}
 	v.Set("callback_query_id", callbackID)
@@ -265,16 +268,11 @@ func (t *Telegram) AnswerCallback(callbackID, text string) error {
 	return nil
 }
 
-// BotCommand is a single entry in the bot's "type /" command menu.
-// Passed to SetMyCommands.
 type BotCommand struct {
 	Command     string `json:"command"`
 	Description string `json:"description"`
 }
 
-// SetMyCommands registers the bot's command menu with Telegram. The menu
-// appears next to the input field in the chat UI and lets users discover
-// and pick commands without typing the leading "/".
 func (t *Telegram) SetMyCommands(commands []BotCommand) error {
 	payload, err := json.Marshal(map[string]any{
 		"commands": commands,
@@ -301,8 +299,6 @@ func (t *Telegram) SetMyCommands(commands []BotCommand) error {
 	return nil
 }
 
-// EditMessageText replaces the text of an existing message (used to refresh
-// the /rollback version list after a successful rollback).
 func (t *Telegram) EditMessageText(chatID int64, messageID int64, text string, rows [][]InlineButton) error {
 	if len(text) > 4000 {
 		text = text[:4000] + "\n\n[...truncated]"

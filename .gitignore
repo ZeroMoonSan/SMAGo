@@ -13,9 +13,17 @@ config.json
 
 # Runtime data
 data/sessions.db
-data/sessions.db-*
-data/versions/*
-data/*.log
+# Editor
+.vscode/
+.idea/
+
+# Playwright MCP snapshots
+.playwright-mcp/
+
+# Temp files
+_counttemp.go
+_gofiles.txt
+count_test.go
 data/*.pid
 data/current.json
 data/next.json

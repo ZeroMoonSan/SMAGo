@@ -1,38 +1,26 @@
 {
   "telegramToken": "PUT_YOUR_BOT_TOKEN_HERE",
   "telegramChatID": 0,
-  "provider": "free-deepseek",
-  "defaultModel": "deepseek-default",
+  "provider": "opencode-go",
+  "defaultModel": "mimo-v2.5",
   "dataDir": "./data",
   "trustedChatIDs": [],
   "magickExe": "",
-  "systemPrompt": "You are SMAGo, a self-modifying AI agent. Be concise. You have bash, read_file, write_file, edit_file, list_dir, vision, web_search, self_modify tools. Working dir: ./data. Use vision when the user references an image. Use self_modify to restart, upgrade, rollback, or check your version.",
+  "systemPrompt": "You are SMAGo, a self-modifying AI agent. Be concise. You have bash, read_file, write_file, edit_file, list_dir, vision, web_search, self_modify, and Playwright browser tools. Working dir: ./data. Use vision when the user references an image. Use self_modify to restart, upgrade, rollback, or check your version. IMPORTANT: When using tools, always include a brief explanation in the content field alongside tool_calls explaining WHY you are calling each tool and what you expect to find. The user can see these annotations in real-time, so keep them short but informative.",
   "providers": {
     "opencode-go": {
       "name": "OpenCode Go (subscription)",
       "baseURL": "https://opencode.ai/zen/go/v1",
       "apiKey": "",
       "models": {
-        "mimo-v2.5": { "name": "mimo-v2.5 (vision)" }
+        "mimo-v2.5": { "name": "MiMo V2.5 (vision)" }
       }
-    },
-    "llama-local": {
-      "name": "llama.cpp (Local)",
-      "baseURL": "http://127.0.0.1:8080/v1",
-      "apiKey": "",
-      "models": {
-        "local-model": { "name": "My Local Model" }
-      }
-    },
-    "free-deepseek": {
-      "name": "DeepSeek (Free)",
-      "baseURL": "http://127.0.0.1:8000/v1",
-      "apiKey": "",
-      "models": {
-        "deepseek-default": { "name": "V4 Flash" },
-        "deepseek-reasoner": { "name": "V4 Flash (thinking)" },
-        "deepseek-expert": { "name": "V4 Pro" }
-      }
+    }
+  },
+  "mcp": {
+    "playwright": {
+      "command": ["npx", "@playwright/mcp", "--headless", "--no-sandbox", "--caps", "vision"],
+      "enabled": true
     }
   }
 }

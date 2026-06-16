@@ -15,10 +15,6 @@ import (
 const version = "0.1.0-mvp"
 
 func main() {
-	// Subcommand dispatch.
-	// The first CLI arg can be a subcommand ("upgrade", "rollback", "smoke-test")
-	// or a config path. The agent runs normally when there's no recognised
-	// subcommand.
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
 		case "upgrade":
@@ -45,7 +41,6 @@ func main() {
 }
 
 func run() error {
-	// Print flags we were launched with (for the log book-keeping).
 	logLaunchFlags()
 
 	enableWindowsVT()
@@ -125,9 +120,6 @@ func run() error {
 			me.Result.Username, me.Result.ID, me.Result.FirstName)
 	}
 
-	// Register the bot's command menu so users can discover /stop, /abort,
-	// /rollback etc. without typing them from memory. Failure is non-fatal —
-	// commands still work if you type them; the menu is just a UX nicety.
 	cmds := []BotCommand{
 		{Command: "start", Description: "Show welcome & help"},
 		{Command: "help", Description: "Show all commands"},
@@ -162,7 +154,7 @@ func run() error {
 
 	tools := NewToolRegistry(cfg)
 	tools.registerDefaults()
-	defer tools.browser.Close()
+	defer tools.Close()
 	agent := NewAgent(cfg, llm, store, tg, tools)
 
 	injectAddr := os.Getenv("SMAGO_INJECT_ADDR")
@@ -212,9 +204,6 @@ func detectAndApplyProxy() string {
 
 func findConfig() (string, error) {
 	if len(os.Args) >= 2 {
-		// First arg might be a CLI flag (--smago-version, --source) or a
-		// subcommand (upgrade, smoke-test). Only treat it as a config path
-		// if it actually looks like a file and doesn't start with "--".
 		cand := os.Args[1]
 		if !strings.HasPrefix(cand, "--") && !isSubcommand(cand) {
 			if _, err := os.Stat(cand); err == nil {
@@ -260,10 +249,6 @@ func setupLogging(dataDir string) error {
 	if err != nil {
 		return err
 	}
-	// In windowsgui mode os.Stderr is a null device and the first write
-	// to it can short-circuit the MultiWriter, leaving the file empty.
-	// Just write to the file — the console (smago.exe) prints directly
-	// to stderr anyway.
 	log.SetOutput(f)
 	return nil
 }

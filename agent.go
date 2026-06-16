@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// defaultMaxSteps caps the tool-call iterations per user message.
 const defaultMaxSteps = 200
 
 var startedAt = time.Now()
@@ -37,7 +36,7 @@ type Agent struct {
 	inject   chan injectedMsg
 	record   func(chatID int64, text string)
 	maxSteps map[int64]int
-	verbose  bool
+	verbose  bool // true = traces sent with sound; false = silent (no notification noise)
 	traceBuf map[int64][]string
 
 	runMu sync.Mutex
@@ -63,7 +62,7 @@ func NewAgent(cfg *Config, llm *LLM, store *Store, tg *Telegram, tools *ToolRegi
 		maxSteps: make(map[int64]int),
 		traceBuf: make(map[int64][]string),
 		runs:     make(map[int64]*runState),
-		verbose:  true,
+		verbose:  false, // silent by default
 	}
 }
 
@@ -92,7 +91,11 @@ func (a *Agent) recordTrace(chatID int64, line string) string {
 		a.traceBuf[chatID] = a.traceBuf[chatID][len(a.traceBuf[chatID])-20:]
 	}
 	if a.verbose {
-		a.sendPlain(chatID, line)
+		// verbose=true: send silently (no sound/vibration on the phone)
+		_ = a.tg.SendSilent(chatID, line)
+		if a.record != nil {
+			a.record(chatID, line)
+		}
 	}
 	return line
 }
@@ -142,6 +145,49 @@ func truncateLog(s string, n int) string {
 	return s[:n] + "…"
 }
 
+func formatToolCall(name string, args map[string]any, resultLen int, toolErr error) string {
+	var b strings.Builder
+	b.WriteString("**" + name + "**")
+
+	keys := sortedKeys(args)
+	for i, k := range keys {
+		v := args[k]
+		valStr := fmt.Sprintf("%v", v)
+		isMulti := strings.Contains(valStr, "\n") || len(valStr) > 80
+
+		prefix := "┣"
+		if i == len(keys)-1 {
+			prefix = "┗"
+		}
+
+		if isMulti {
+			b.WriteString("\n" + prefix + " " + k + ":\n```\n" + valStr + "\n```")
+		} else {
+			b.WriteString("\n" + prefix + " " + k + ": `" + truncateLog(valStr, 60) + "`")
+		}
+	}
+
+	if toolErr != nil {
+		b.WriteString("\n→ error: " + toolErr.Error())
+	} else {
+		b.WriteString(fmt.Sprintf("\n→ %d chars", resultLen))
+	}
+	return b.String()
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j] < keys[j-1]; j-- {
+			keys[j], keys[j-1] = keys[j-1], keys[j]
+		}
+	}
+	return keys
+}
+
 func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	sess, err := a.store.LoadOrCreate(chatID)
 	if err != nil {
@@ -169,8 +215,8 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	cleanup := a.registerRun(chatID, rs)
 	defer cleanup()
 
-	a.recordTrace(chatID, fmt.Sprintf("→ %s\nmodel=%s\nmax=%d\ntools=%d",
-		truncateLog(userText, 100), a.cfg.DefaultModel, maxSteps, len(tools)))
+	a.recordTrace(chatID, fmt.Sprintf("→ %s\nmax=%d tools=%d",
+		truncateLog(userText, 100), maxSteps, len(tools)))
 
 	for i := 0; i < maxSteps; i++ {
 		select {
@@ -229,19 +275,19 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				})
 				continue
 			}
-			argStr := truncateLog(fmt.Sprintf("%v", args), 150)
+
+			var toolErr error
 			out, err := tdef.Execute(runCtx, args)
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					toolLines = append(toolLines, fmt.Sprintf("  🛑 %s(%s) cancelled", tc.Function.Name, argStr))
+					toolLines = append(toolLines, fmt.Sprintf("  🛑 %s cancelled", tc.Function.Name))
 					a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1)
 					return "🛑 aborted.", nil
 				}
-				toolLines = append(toolLines, fmt.Sprintf("  ✗ %s(%s) → error: %v", tc.Function.Name, argStr, err))
+				toolErr = err
 				out = "error: " + err.Error()
-			} else {
-				toolLines = append(toolLines, fmt.Sprintf("  ✓ %s(%s) → %d chars", tc.Function.Name, argStr, len(out)))
 			}
+			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, len(out), toolErr))
 			_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 			messages = append(messages,
 				ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
@@ -270,22 +316,13 @@ func (a *Agent) recordStep(chatID int64, step, max int, usage *Usage, dur time.D
 		in, out, total = usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens
 	}
 	secs := dur.Seconds()
-	tps := 0.0
-	if secs > 0 && total > 0 {
-		tps = float64(total) / secs
-	}
-	itps := 0.0
-	if secs > 0 && in > 0 {
-		itps = float64(in) / secs
-	}
 	otps := 0.0
 	if secs > 0 && out > 0 {
 		otps = float64(out) / secs
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "✓ step %d/%d\n", step, max)
-	fmt.Fprintf(&b, "in=%d out=%d total=%d\n", in, out, total)
-	fmt.Fprintf(&b, "tps=%.1f itps=%.1f otps=%.1f\n", tps, itps, otps)
+	fmt.Fprintf(&b, "in=%d out=%d total=%d otps=%.1f\n", in, out, total, otps)
 	fmt.Fprintf(&b, "dur=%.1fs", secs)
 	if len(toolLines) > 0 {
 		for _, line := range toolLines {
@@ -449,7 +486,6 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 
 		chatID := upd.Message.Chat.ID
 
-		// Handle /stop and /abort even while a task is running
 		switch {
 		case text == "/stop":
 			if rs := a.getRun(chatID); rs != nil {
@@ -469,7 +505,6 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			continue
 		}
 
-		// If a task is already running for this chat, send "busy" hint
 		if rs := a.getRun(chatID); rs != nil {
 			a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
 			continue
@@ -493,10 +528,9 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 					"Visibility:\n"+
 					"/tools — list available tools\n"+
 					"/trace — show last 20 agent actions\n"+
-					"/verbose — toggle inline tool-call traces\n\n"+
+					"/verbose — toggle inline step traces\n\n"+
 					"Self-update:\n"+
 					"/version — show build version\n"+
-					"/upgrade vN — build and swap to vN\n"+
 					"/rollback — pick a previous version to roll back to\n"+
 					"/gitsha /gitlog /gitdiff — git plumbing\n\n"+
 					"Meta:\n"+
@@ -509,7 +543,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				"/start /help /new /clear /stop /abort\n"+
 					"/models /model /provider /system /maxsteps\n"+
 					"/tools /trace /verbose\n"+
-					"/version /upgrade /rollback /gitsha /gitlog /gitdiff\n"+
+					"/version /rollback /gitsha /gitlog /gitdiff\n"+
 					"/chatid /health")
 			continue
 		case text == "/models":
@@ -535,7 +569,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				continue
 			}
 			if len(versions) == 0 {
-				a.send(chatID, "no versions on disk (data/versions/ is empty)")
+				a.send(chatID, "no versions on disk")
 				continue
 			}
 			var b strings.Builder
@@ -569,12 +603,8 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			if args == "" {
 				a.send(chatID, "current model: "+a.cfg.DefaultModel)
 			} else {
-				if _, ok := a.cfg.Providers[a.cfg.Provider]; ok {
-					a.cfg.DefaultModel = args
-					a.send(chatID, "✅ model set to "+args)
-				} else {
-					a.send(chatID, "❌ no provider selected")
-				}
+				a.cfg.DefaultModel = args
+				a.send(chatID, "✅ model set to "+args)
 			}
 			continue
 		case text == "/provider" || strings.HasPrefix(text, "/provider "):
@@ -609,23 +639,6 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				a.cfg.SystemPrompt = args
 				a.send(chatID, "✅ system prompt updated ("+fmt.Sprintf("%d", len(args))+" chars)")
 			}
-			continue
-		case text == "/upgrade" || strings.HasPrefix(text, "/upgrade "):
-			args := strings.TrimPrefix(text, "/upgrade")
-			args = strings.TrimSpace(args)
-			if args == "" {
-				a.send(chatID, "usage: /upgrade vN\ncurrent: "+flagValue("--smago-version"))
-				continue
-			}
-			a.send(chatID, "🔨 building "+args+"...")
-			go func(v string) {
-				out, err := runSelfUpgrade(v)
-				if err != nil {
-					a.send(chatID, "❌ upgrade failed: "+err.Error()+"\n\n"+truncateLog(out, 1500))
-					return
-				}
-				a.send(chatID, "✅ upgrade "+v+" sent to supervisor\n\n"+truncateLog(out, 1000))
-			}(args)
 			continue
 		case text == "/version":
 			buildVer := flagValue("--smago-version")
@@ -666,12 +679,12 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}
 			a.sendPlain(chatID, b.String())
 			continue
-		case text == "/verbose" || text == "/quiet":
+		case text == "/verbose":
 			a.verbose = !a.verbose
 			if a.verbose {
-				a.send(chatID, "✅ verbose ON — tool calls will be shown inline")
+				a.send(chatID, "✅ verbose ON — step traces shown inline (silent)")
 			} else {
-				a.send(chatID, "✅ verbose OFF — only final answers")
+				a.send(chatID, "✅ verbose OFF — traces hidden, use /trace to review")
 			}
 			continue
 		case text == "/maxsteps" || strings.HasPrefix(text, "/maxsteps "):
@@ -739,7 +752,6 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 
 		a.typing(chatID)
 
-		// Run Handle in a goroutine so RunLoop stays responsive to /abort and /stop
 		go func(cid int64, msg string) {
 			reply, err := a.Handle(cid, msg)
 			if err != nil {
@@ -760,7 +772,7 @@ func (a *Agent) showRollbackMenu(chatID int64) {
 		return
 	}
 	if len(versions) == 0 {
-		a.send(chatID, "no versions on disk (data/versions/ is empty)")
+		a.send(chatID, "no versions on disk")
 		return
 	}
 	var rows [][]InlineButton

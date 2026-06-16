@@ -6,7 +6,8 @@ Lightweight Go agent that talks to you via Telegram, calls an OpenAI-compatible 
 
 - **Telegram bot** — long-polling, no webhooks needed
 - **Multi-provider LLM** — DeepSeek, llama.cpp, OpenCode, any OpenAI-compatible API
-- **Tool calling** — bash, read/write/edit files, web search, vision
+- **Tool calling** — terminal, read/write/edit files, web search, vision, Playwright browser
+- **MCP support** — connects to Model Context Protocol servers (Playwright, etc.)
 - **Self-modification** — upgrade, rollback, restart via `self_modify` tool or Telegram commands
 - **Supervisor** — system tray icon, auto-restart on crash, version swap
 - **Markdown rendering** — headings as bold, tables with column alignment, code blocks
@@ -77,7 +78,7 @@ start-bg.bat
 
 ### Self-update
 - `/version` — show build version, git SHA, uptime
-- `/upgrade vN` — build and swap to version N
+- `/upgrade SHA` — build and swap to commit SHA
 - `/rollback` — pick a previous version to roll back to
 - `/restart` — restart the agent
 - `/gitsha` — show current git HEAD
@@ -88,7 +89,7 @@ start-bg.bat
 
 | Tool | Description |
 |------|-------------|
-| `bash` | Run shell commands (30s timeout) |
+| `terminal` | Run shell commands (30s timeout) |
 | `read_file` | Read a file from disk |
 | `write_file` | Write a file (requires read_file first) |
 | `edit_file` | Line-level edits: replace, delete, insert |
@@ -96,29 +97,45 @@ start-bg.bat
 | `web_search` | Search DuckDuckGo |
 | `vision` | Analyze images (mimo-v2.5) |
 | `self_modify` | Restart, upgrade, rollback, or check version |
+| `playwright__*` | Playwright browser tools (29 tools via MCP) |
 
-### edit_file operations
+### Tool call formatting
 
-```json
-// Replace lines 2-4
-{"path": "file.txt", "action": "replace", "start": 2, "end": 4, "content": "new lines"}
+Tool calls are displayed in a tree-style format:
 
-// Delete lines 10-15
-{"path": "file.txt", "action": "delete", "start": 10, "end": 15}
-
-// Insert after line 3 (0 = before line 1)
-{"path": "file.txt", "action": "insert", "start": 3, "content": "inserted lines"}
+```
+**terminal**
+┣ command: `ls -la`
+┗ annotation: List files in data directory
+→ 237 chars
 ```
 
-### self_modify actions
+For multi-line arguments:
 
-```json
-{"action": "list"}                    // List all built versions
-{"action": "current"}                 // Show running version + git SHA
-{"action": "upgrade", "version": "v3"} // Build and swap to v3
-{"action": "rollback", "version": "v2", "force": true} // Roll back to v2
-{"action": "restart"}                 // Clean exit, supervisor restarts
 ```
+**terminal**
+╺ command:
+```
+cd .. && go build -o agent.exe . 2>&1
+```
+╺ annotation: Build the agent
+→ 0 chars
+```
+
+## Version management
+
+SMAGo uses git commit SHAs as version identifiers:
+
+```
+data/
+  versions/
+    cff3262/agent.exe
+    addc8d7/agent.exe
+  current.json    {"version": "cff3262"}
+  next.json       {"version": "addc8d7"} (pending swap)
+```
+
+The supervisor watches for `next.json` and swaps binaries gracefully. If a version crashes within 20 seconds, it's marked as bad and won't be used again.
 
 ## Architecture
 
@@ -129,10 +146,10 @@ llm.go               OpenAI-compatible chat completions client
 telegram.go          long-polling Bot API client (stdlib only, no deps)
 session.go           SQLite store (modernc.org/sqlite, no CGO)
 agent.go             main loop: user msg → LLM → tool calls → response
-tools.go             tool registry: bash, read/write/edit, list_dir
+tools.go             tool registry: terminal, read/write/edit, list_dir
 self_modify_tool.go  self-modification: upgrade, rollback, restart
+mcp.go               Model Context Protocol client (stdio JSON-RPC)
 markdown.go          Markdown → Telegram HTML (headings, tables, code, bold/italic)
-browser_tool.go      Playwright browser tool (opt-in via env)
 vision.go            image analysis via mimo-v2.5
 web_search_tool.go   DuckDuckGo HTML search
 cmd/supervisor/      system tray supervisor with version management
@@ -154,18 +171,3 @@ set SMAGO_TELEGRAM_TOKEN=your_token
 set SMAGO_TELEGRAM_CHAT_ID=your_chat_id
 set SMAGO_OPENCODE_KEY=your_api_key
 ```
-
-## Version management
-
-SMAGo uses a version directory structure:
-```
-data/
-  versions/
-    v0/agent.exe
-    v1/agent.exe
-    v2/agent.exe
-  current.json    {"version": "v1"}
-  next.json       {"version": "v2"} (pending swap)
-```
-
-The supervisor watches for `next.json` and swaps binaries gracefully. If a version crashes within 20 seconds, it's marked as bad and won't be used again.

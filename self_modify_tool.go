@@ -6,18 +6,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
 
-// SelfModifyTool lets the LLM manage its own version: build new versions,
-// swap to them via the supervisor, roll back to previous builds, or just
-// restart the running process so the supervisor brings up a fresh agent.
-//
-// All actions respect the caller's context — a /abort from the user
-// cancels an in-flight build/rollback cleanly.
 type SelfModifyTool struct {
 	cfg *Config
 }
@@ -36,7 +28,7 @@ func (s *SelfModifyTool) Definition() ToolDef {
 				},
 				"version": map[string]any{
 					"type":        "string",
-					"description": "For upgrade/rollback: target version like 'v5'.",
+					"description": "For upgrade/rollback: target version as git SHA prefix (e.g. 'cff3262').",
 				},
 				"force": map[string]any{
 					"type":        "boolean",
@@ -49,14 +41,12 @@ func (s *SelfModifyTool) Definition() ToolDef {
 	}
 }
 
-// selfModifyDescription is a package-level const so the long, multi-line
-// text doesn't confuse the parser with mid-struct string concatenation.
 const selfModifyDescription = "Manage this agent's own version. Use sparingly - " +
 	"these actions change the running binary and may interrupt the current task. " +
+	"Versions are identified by git commit SHA (short form). " +
 	"Actions: list (show all built versions), current (show running version + git SHA), " +
-	"upgrade (build a new version and ask the supervisor to swap to it; pass version " +
-	"like 'v5' to pick the tag, omit to auto-pick the next one), rollback (revert the " +
-	"working tree to a previous build and rebuild; version required, pass force=true to " +
+	"upgrade (build a new version from current HEAD and ask the supervisor to swap to it), " +
+	"rollback (revert the working tree to a previous version's commit and rebuild; version required, pass force=true to " +
 	"skip the dirty-tree check), restart (exit cleanly so the supervisor brings a fresh " +
 	"process up; same binary, no rebuild)."
 
@@ -122,14 +112,12 @@ func (s *SelfModifyTool) actionCurrent() (string, error) {
 func (s *SelfModifyTool) actionUpgrade(ctx context.Context, args map[string]any) (string, error) {
 	version, _ := args["version"].(string)
 	if version == "" {
-		next, err := nextVersion()
+		// Use current git HEAD as the version.
+		sha, err := gitHead()
 		if err != nil {
-			return "", fmt.Errorf("next version: %w", err)
+			return "", fmt.Errorf("git HEAD: %w", err)
 		}
-		version = next
-	}
-	if !validVersion(version) {
-		return "", fmt.Errorf("invalid version %q (expected like v3)", version)
+		version = sha
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -144,9 +132,6 @@ func (s *SelfModifyTool) actionRollback(ctx context.Context, args map[string]any
 	version, _ := args["version"].(string)
 	if version == "" {
 		return "", fmt.Errorf("version is required for rollback (use action=list to see available)")
-	}
-	if !validVersion(version) {
-		return "", fmt.Errorf("invalid version %q (expected like v3)", version)
 	}
 	force, _ := args["force"].(bool)
 	if !force {
@@ -179,33 +164,4 @@ func (s *SelfModifyTool) actionRestart() (string, error) {
 		os.Exit(0)
 	}()
 	return "restart scheduled - supervisor will bring a fresh process up in ~1s", nil
-}
-
-// nextVersion scans data/versions/ and returns the next "vN" not yet on
-// disk. If the directory is empty, returns "v0".
-func nextVersion() (string, error) {
-	entries, err := os.ReadDir(filepath.Join("data", "versions"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "v0", nil
-		}
-		return "", err
-	}
-	re := regexp.MustCompile(`^v(\d+)$`)
-	maxN := -1
-	for _, e := range entries {
-		m := re.FindStringSubmatch(e.Name())
-		if m == nil {
-			continue
-		}
-		n, _ := strconv.Atoi(m[1])
-		if n > maxN {
-			maxN = n
-		}
-	}
-	return fmt.Sprintf("v%d", maxN+1), nil
-}
-
-func validVersion(v string) bool {
-	return regexp.MustCompile(`^v\d+$`).MatchString(v)
 }

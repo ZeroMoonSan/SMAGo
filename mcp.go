@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,19 +13,20 @@ import (
 )
 
 // MCPClient speaks the Model Context Protocol over stdio (JSON-RPC 2.0
-// newline-delimited). It is intentionally simple — synchronous
-// request/response, no streaming, no notifications beyond `initialized`.
+// newline-delimited).
 type MCPClient struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
-	reader *bufio.Reader
 	stderr io.ReadCloser
-
-	mu     sync.Mutex
-	nextID int
 
 	name    string
 	version string
+
+	// The read-loop runs in a dedicated goroutine. Each send() puts a
+	// channel into pending; the read-loop dispatches responses by ID.
+	mu      sync.Mutex
+	nextID  int
+	pending map[int]chan json.RawMessage
 }
 
 // MCPServerConfig is one entry from the agent config's "mcp" map.
@@ -34,9 +36,7 @@ type MCPServerConfig struct {
 	Env     map[string]string `json:"env"`
 }
 
-// MCPTool is what we hand back to the ToolRegistry. The agent's LLM
-// dispatcher doesn't care whether a tool is in-process or remote — the
-// ToolDef.Execute closure hides the MCP call.
+// MCPTool is what we hand back to the ToolRegistry.
 type MCPTool struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
@@ -63,8 +63,7 @@ type mcpCallResult struct {
 	IsError bool `json:"isError"`
 }
 
-// NewMCPClient spawns the server process and runs the initialize
-// handshake. The caller must Close() the client when done.
+// NewMCPClient spawns the server process and runs the initialize handshake.
 func NewMCPClient(name string, cfg MCPServerConfig) (*MCPClient, error) {
 	if len(cfg.Command) == 0 {
 		return nil, fmt.Errorf("mcp %q: empty command", name)
@@ -93,18 +92,19 @@ func NewMCPClient(name string, cfg MCPServerConfig) (*MCPClient, error) {
 	}
 
 	c := &MCPClient{
-		cmd:    cmd,
-		stdin:  stdin,
-		reader: bufio.NewReader(stdout),
-		stderr: stderr,
-		name:   name,
+		cmd:     cmd,
+		stdin:   stdin,
+		stderr:  stderr,
+		name:    name,
+		pending: make(map[int]chan json.RawMessage),
 	}
 
-	// Drain stderr to the agent log.
+	// Start the persistent read-loop.
+	go c.readLoop(bufio.NewReader(stdout))
 	go c.drainStderr()
 
 	// Initialize handshake.
-	res, err := c.send("initialize", map[string]any{
+	res, err := c.send(context.Background(), "initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
 		"clientInfo":      map[string]any{"name": "smago", "version": "0.1.0"},
@@ -123,9 +123,45 @@ func NewMCPClient(name string, cfg MCPServerConfig) (*MCPClient, error) {
 	c.version = init.ServerInfo.Version
 	log.Printf("mcp %s: connected (%s)", name, init.ServerInfo.Name)
 
-	// Send `notifications/initialized` (no id, no response).
 	c.notify("notifications/initialized", map[string]any{})
 	return c, nil
+}
+
+// readLoop reads lines from stdout and dispatches responses by ID.
+// It runs for the lifetime of the process.
+func (c *MCPClient) readLoop(reader *bufio.Reader) {
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		var msg struct {
+			ID     int             `json:"id"`
+			Result json.RawMessage `json:"result"`
+			Error  *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			log.Printf("mcp[%s] non-JSON: %s", c.name, line)
+			continue
+		}
+		c.mu.Lock()
+		ch, ok := c.pending[msg.ID]
+		c.mu.Unlock()
+		if ok {
+			// If the error is non-nil, wrap it into the result so the
+			// caller can decode it.
+			if msg.Error != nil {
+				errJSON, _ := json.Marshal(msg.Error)
+				ch <- errJSON
+			} else {
+				ch <- msg.Result
+			}
+		}
+		// If nobody is waiting (stale ID), just drop it.
+	}
 }
 
 func (c *MCPClient) drainStderr() {
@@ -144,8 +180,8 @@ func (c *MCPClient) drainStderr() {
 func (c *MCPClient) notify(method string, params any) {
 	data, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
-		"method": method,
-		"params": params,
+		"method":  method,
+		"params":  params,
 	})
 	data = append(data, '\n')
 	c.mu.Lock()
@@ -153,12 +189,20 @@ func (c *MCPClient) notify(method string, params any) {
 	_, _ = c.stdin.Write(data)
 }
 
-func (c *MCPClient) send(method string, params any) (json.RawMessage, error) {
+func (c *MCPClient) send(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.nextID++
 	id := c.nextID
+	ch := make(chan json.RawMessage, 1)
+	c.pending[id] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+	}()
+
 	req := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
@@ -167,45 +211,35 @@ func (c *MCPClient) send(method string, params any) (json.RawMessage, error) {
 	}
 	data, _ := json.Marshal(req)
 	data = append(data, '\n')
-	if _, err := c.stdin.Write(data); err != nil {
+
+	c.mu.Lock()
+	_, err := c.stdin.Write(data)
+	c.mu.Unlock()
+	if err != nil {
 		return nil, err
 	}
 
-	deadline := time.Now().Add(60 * time.Second)
-	for time.Now().Before(deadline) {
-		c.reader = bufio.NewReader(nil) // no-op; keep field for clarity
-		line, err := c.reader.ReadString('\n')
-		if err != nil {
-			return nil, err
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case raw := <-ch:
+		// Check if this is an error response (from readLoop's error wrapping).
+		// MCP error objects have "code" and "message" fields.
+		var errCheck struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
 		}
-		var resp struct {
-			ID     int             `json:"id"`
-			Result json.RawMessage `json:"result"`
-			Error  *struct {
-				Code    int    `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
+		if err := json.Unmarshal(raw, &errCheck); err == nil && errCheck.Code != 0 {
+			return nil, fmt.Errorf("mcp error %d: %s", errCheck.Code, errCheck.Message)
 		}
-		if err := json.Unmarshal([]byte(line), &resp); err != nil {
-			// Non-JSON line on stdout — should not happen, log it.
-			log.Printf("mcp[%s] non-JSON: %s", c.name, line)
-			continue
-		}
-		if resp.ID != id {
-			// Stale response or notification — keep reading.
-			continue
-		}
-		if resp.Error != nil {
-			return nil, fmt.Errorf("mcp error %d: %s", resp.Error.Code, resp.Error.Message)
-		}
-		return resp.Result, nil
+		return raw, nil
+	case <-time.After(120 * time.Second):
+		return nil, fmt.Errorf("mcp %s: timeout waiting for response to %s", c.name, method)
 	}
-	return nil, fmt.Errorf("mcp %s: timeout waiting for response to %s", c.name, method)
 }
 
-// ListTools queries the server for the tools it exposes.
 func (c *MCPClient) ListTools() ([]MCPTool, error) {
-	res, err := c.send("tools/list", map[string]any{})
+	res, err := c.send(context.Background(), "tools/list", map[string]any{})
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +250,8 @@ func (c *MCPClient) ListTools() ([]MCPTool, error) {
 	return lt.Tools, nil
 }
 
-// CallTool invokes a tool and returns its text content. If the server
-// returns multiple content blocks, they are joined with newlines.
-func (c *MCPClient) CallTool(name string, args map[string]any) (string, error) {
-	res, err := c.send("tools/call", map[string]any{
+func (c *MCPClient) CallTool(ctx context.Context, name string, args map[string]any) (string, error) {
+	res, err := c.send(ctx, "tools/call", map[string]any{
 		"name":      name,
 		"arguments": args,
 	})
@@ -231,12 +263,12 @@ func (c *MCPClient) CallTool(name string, args map[string]any) (string, error) {
 		return "", err
 	}
 	var out string
-	for i, c := range cr.Content {
-		if c.Type == "text" {
+	for i, ct := range cr.Content {
+		if ct.Type == "text" {
 			if i > 0 {
 				out += "\n"
 			}
-			out += c.Text
+			out += ct.Text
 		}
 	}
 	if cr.IsError && out == "" {
