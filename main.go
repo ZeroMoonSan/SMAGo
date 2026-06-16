@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -17,13 +16,18 @@ const version = "0.1.0-mvp"
 
 func main() {
 	// Subcommand dispatch.
-	// The first CLI arg can be a subcommand ("upgrade", "smoke-test") or a
-	// config path. The agent runs normally when there's no recognised
+	// The first CLI arg can be a subcommand ("upgrade", "rollback", "smoke-test")
+	// or a config path. The agent runs normally when there's no recognised
 	// subcommand.
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
 		case "upgrade":
 			if err := cmdUpgrade(os.Args[2:]); err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "rollback":
+			if err := cmdRollback(os.Args[2:]); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -101,9 +105,7 @@ func run() error {
 	}
 	defer store.Close()
 
-	if err := writePID(cfg.DataDir, os.Getpid()); err != nil {
-		log.Printf("pid file: %v", err)
-	}
+	_ = writePID(cfg.DataDir, os.Getpid())
 
 	tg := NewTelegram(cfg.TelegramToken)
 	if proxyURL != "" {
@@ -123,7 +125,42 @@ func run() error {
 			me.Result.Username, me.Result.ID, me.Result.FirstName)
 	}
 
+	// Register the bot's command menu so users can discover /stop, /abort,
+	// /rollback etc. without typing them from memory. Failure is non-fatal —
+	// commands still work if you type them; the menu is just a UX nicety.
+	cmds := []BotCommand{
+		{Command: "start", Description: "Show welcome & help"},
+		{Command: "help", Description: "Show all commands"},
+		{Command: "new", Description: "Start a fresh session"},
+		{Command: "clear", Description: "Clear session history"},
+		{Command: "models", Description: "Pick a model (inline buttons)"},
+		{Command: "model", Description: "Show or set the current model"},
+		{Command: "provider", Description: "Show or set the current provider"},
+		{Command: "system", Description: "Show or set the system prompt"},
+		{Command: "maxsteps", Description: "Show or set the tool-call budget"},
+		{Command: "tools", Description: "List available tools"},
+		{Command: "trace", Description: "Show the last agent actions"},
+		{Command: "verbose", Description: "Toggle inline tool-call traces"},
+		{Command: "stop", Description: "Stop the current task after this step"},
+		{Command: "abort", Description: "Force-stop the current task (kills tools)"},
+		{Command: "rollback", Description: "Roll back to a previous version"},
+		{Command: "upgrade", Description: "Build a new version and ask supervisor to swap"},
+		{Command: "version", Description: "Show build version"},
+		{Command: "gitlog", Description: "Show recent commits"},
+		{Command: "gitsha", Description: "Show the current commit"},
+		{Command: "gitdiff", Description: "Show working-tree diff"},
+		{Command: "health", Description: "Liveness check"},
+		{Command: "chatid", Description: "Show this chat's id"},
+	}
+	if err := tg.SetMyCommands(cmds); err != nil {
+		log.Printf("warn: setMyCommands failed: %v", err)
+	} else {
+		log.Printf("telegram: ✓ registered %d bot commands", len(cmds))
+	}
+
 	tools := NewToolRegistry(cfg)
+	tools.registerDefaults()
+	defer tools.browser.Close()
 	agent := NewAgent(cfg, llm, store, tg, tools)
 
 	injectAddr := os.Getenv("SMAGO_INJECT_ADDR")
@@ -221,8 +258,11 @@ func setupLogging(dataDir string) error {
 	if err != nil {
 		return err
 	}
-	mw := io.MultiWriter(os.Stderr, f)
-	log.SetOutput(mw)
+	// In windowsgui mode os.Stderr is a null device and the first write
+	// to it can short-circuit the MultiWriter, leaving the file empty.
+	// Just write to the file — the console (smago.exe) prints directly
+	// to stderr anyway.
+	log.SetOutput(f)
 	return nil
 }
 
@@ -247,7 +287,7 @@ func logLaunchFlags() {
 
 func isSubcommand(name string) bool {
 	switch name {
-	case "upgrade", "smoke-test":
+	case "upgrade", "rollback", "smoke-test":
 		return true
 	}
 	return false

@@ -12,18 +12,26 @@
 // HTTP API on 127.0.0.1:7778:
 //   POST /upgrade?v=vN    signal supervisor to swap on next cycle
 //   GET  /health          return "ok"
+//
+// UI: system tray icon (smago.ico) with a menu (status / open log / quit).
+// No console window — the binary is built with -H windowsgui.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/energye/systray"
 )
 
 const (
@@ -39,15 +47,112 @@ type State struct {
 	Version string `json:"version"`
 }
 
-var upgradeCh = make(chan string, 4)
+var (
+	upgradeCh   = make(chan string, 4)
+	stopCh      = make(chan struct{})
+	currentTag  = "—"
+	statusItem  *systray.MenuItem
+	versionItem *systray.MenuItem
+)
 
 func main() {
+	// Make sure we don't pop a console when the binary is built with
+	// -H windowsgui (it shouldn't, but be defensive).
+	runtime.LockOSThread()
+
 	mustExist("data")
 	mustExist("data/versions")
 
 	_ = os.WriteFile("data/supervisor.pid", []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove("data/supervisor.pid")
 
+	// Tray icon + menu in its own goroutine. systray.Run blocks.
+	// We initialise from the goroutine and exit cleanly via stopCh.
+	systray.Run(onReady, onExit)
+}
+
+func onReady() {
+	iconPath := "smago.ico"
+	if _, err := os.Stat(iconPath); err == nil {
+		icon, _ := os.ReadFile(iconPath)
+		if len(icon) > 0 {
+			systray.SetIcon(icon)
+		}
+	}
+	systray.SetTitle("SMAGo")
+	systray.SetTooltip("SMAGo supervisor")
+
+	statusItem = systray.AddMenuItem("starting…", "current supervisor status")
+	statusItem.Disable()
+	systray.AddSeparator()
+	versionItem = systray.AddMenuItem("version: —", "current agent version")
+	versionItem.Disable()
+	systray.AddSeparator()
+
+	mLogs := systray.AddMenuItem("Open log", "open data\\smago.log in the default app")
+	mData := systray.AddMenuItem("Open data dir", "open the data directory in Explorer")
+	systray.AddSeparator()
+	mHealth := systray.AddMenuItem("Health check", "ping 127.0.0.1:7778/health")
+	mRestart := systray.AddMenuItem("Restart agent", "kill current agent, supervisor relaunches it")
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit supervisor", "stop everything")
+
+	go runSupervisor()
+
+	mLogs.Click(func() { openWithDefaultApp(filepath.Join("data", "smago.log")) })
+	mData.Click(func() { openWithDefaultApp("data") })
+	mHealth.Click(func() {
+		resp, err := http.Get("http://" + supervisorAddr + "/health")
+		if err != nil {
+			setStatus("health: " + err.Error())
+			return
+		}
+		resp.Body.Close()
+		setStatus("health: ok")
+	})
+	mRestart.Click(func() {
+		select {
+		case upgradeCh <- currentTag:
+		default:
+		}
+		setStatus("restart requested")
+	})
+	mQuit.Click(func() { systray.Quit() })
+}
+
+func onExit() {
+	close(stopCh)
+}
+
+func handleTrayClicks() {} // unused — kept for future
+
+func setStatus(s string) {
+	if statusItem != nil {
+		statusItem.SetTitle(s)
+	}
+}
+
+func setVersion(v string) {
+	currentTag = v
+	if versionItem != nil {
+		versionItem.SetTitle("version: " + v)
+	}
+	systray.SetTooltip("SMAGo supervisor — agent " + v)
+}
+
+func openWithDefaultApp(path string) {
+	switch runtime.GOOS {
+	case "windows":
+		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", path).Start()
+		_ = exec.Command("cmd", "/c", "start", "", path).Start()
+	case "darwin":
+		_ = exec.Command("open", path).Start()
+	default:
+		_ = exec.Command("xdg-open", path).Start()
+	}
+}
+
+func runSupervisor() {
 	http.HandleFunc("/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		v := r.URL.Query().Get("v")
 		if v == "" {
@@ -60,7 +165,7 @@ func main() {
 			_ = os.WriteFile(nextFile, []byte(fmt.Sprintf(`{"version":%q}`, v)), 0644)
 		}
 		_, _ = w.Write([]byte("ok"))
-		log.Printf("supervisor: queued swap to %s", v)
+		setStatus("upgrade → " + v)
 	})
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ok"))
@@ -76,10 +181,17 @@ func main() {
 		current = "v0"
 		_ = os.WriteFile(currentFile, []byte(fmt.Sprintf(`{"version":%q}`, current)), 0644)
 	}
+	setVersion(current)
 
 	for {
+		select {
+		case <-stopCh:
+			setStatus("shutting down")
+			return
+		default:
+		}
+
 		target := current
-		// Drain pending upgrade requests.
 		select {
 		case v := <-upgradeCh:
 			target = v
@@ -92,44 +204,36 @@ func main() {
 		}
 
 		if isBad(target) {
-			log.Printf("supervisor: %s marked bad, refusing", target)
+			setStatus("refusing bad " + target)
 			target = current
 		}
 
 		exePath := "data/versions/" + target + "/" + exeName
 		if _, err := os.Stat(exePath); err != nil {
-			log.Printf("supervisor: %s missing (%v), keeping %s", exePath, err, current)
+			setStatus(target + " missing, keeping " + current)
 			target = current
 			exePath = "data/versions/" + target + "/" + exeName
 		}
 
-		// Run it; update current on success if it's a new version.
+		setStatus("running " + target)
 		newCurrent, ok := runOne(target, exePath, current)
-		_ = newCurrent
 		if ok && newCurrent != current {
 			current = newCurrent
 			_ = os.WriteFile(currentFile, []byte(fmt.Sprintf(`{"version":%q}`, current)), 0644)
-		} else if !ok {
-			// Stay on `current`.
 		}
+		setVersion(current)
 		time.Sleep(1 * time.Second)
 	}
 }
 
-// runOne launches the given version and waits for it to exit OR for an
-// upgrade request. Returns the new current version (may equal the input)
-// and whether the run was "successful" (ran at least crashWindow).
 func runOne(target, exePath, current string) (string, bool) {
-	log.Printf("supervisor: launching %s", exePath)
 	started := time.Now()
 	cmd := exec.Command(exePath, "--smago-version="+target, "--smago-supervisor=1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Inherit but ensure Go is on PATH so the agent can run `go build`
-	// for self-upgrades. We add common Go install locations if missing.
 	cmd.Env = augmentPath(os.Environ())
 	if err := cmd.Start(); err != nil {
-		log.Printf("supervisor: failed to start %s: %v", exePath, err)
+		setStatus("start failed: " + err.Error())
 		return current, false
 	}
 
@@ -140,23 +244,21 @@ func runOne(target, exePath, current string) (string, bool) {
 	case err := <-exitCh:
 		elapsed := time.Since(started)
 		if err == nil {
-			log.Printf("supervisor: %s exited cleanly after %s", target, elapsed)
+			setStatus(target + " exited cleanly")
 			return current, true
 		}
-		log.Printf("supervisor: %s exited with %v after %s", target, err, elapsed)
+		setStatus(fmt.Sprintf("%s crashed: %v", target, err))
 		if elapsed < crashWindow {
 			if target != current {
-				log.Printf("supervisor: NEW %s crashed fast — marking bad, keeping %s", target, current)
 				markBad(target)
 			} else {
-				log.Printf("supervisor: %s crashed fast — marking bad, no fallback", target)
 				markBad(target)
 			}
 		}
 		return current, false
 
 	case v := <-upgradeCh:
-		log.Printf("supervisor: upgrade to %s requested, stopping %s gracefully", v, target)
+		setStatus("swapping " + target + " → " + v)
 		_ = cmd.Process.Signal(syscall.SIGTERM)
 		select {
 		case <-exitCh:
@@ -164,11 +266,18 @@ func runOne(target, exePath, current string) (string, bool) {
 			_ = cmd.Process.Kill()
 			<-exitCh
 		}
-		log.Printf("supervisor: %s stopped, switching to %s", target, v)
-		// Don't update `current` here — the caller's loop will pick up v as
-		// the new target on the next iteration.
-		_ = current
 		return v, true
+
+	case <-stopCh:
+		setStatus("stopping " + target)
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-exitCh:
+		case <-time.After(5 * time.Second):
+			_ = cmd.Process.Kill()
+			<-exitCh
+		}
+		return current, false
 	}
 }
 
@@ -228,3 +337,6 @@ func mustExist(path string) {
 		log.Fatalf("supervisor: required path %s missing: %v", path, err)
 	}
 }
+
+// silence unused-import warning if context goes out of use later.
+var _ = context.Background

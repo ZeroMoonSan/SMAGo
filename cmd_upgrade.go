@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -62,6 +61,7 @@ func cmdSmokeTest() error {
 	log.Printf("telegram ok: @%s", me.Result.Username)
 
 	tools := NewToolRegistry(cfg)
+	tools.registerDefaults()
 	if len(tools.All()) == 0 {
 		return fmt.Errorf("no tools registered")
 	}
@@ -117,7 +117,7 @@ func cmdUpgrade(args []string) error {
 	log.Printf("upgrade: building %s from %s", outPath, source)
 
 	// Step 1: build.
-	build := exec.Command("go", "build", "-o", outPath, source)
+	build := hiddenCmd("go", "build", "-o", outPath, source)
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -126,7 +126,7 @@ func cmdUpgrade(args []string) error {
 
 	// Step 2: smoke test — run the new binary briefly.
 	log.Printf("upgrade: smoke-testing new binary")
-	test := exec.Command(outPath, "smoke-test")
+	test := hiddenCmd(outPath, "smoke-test")
 	test.Stdout = os.Stdout
 	test.Stderr = os.Stderr
 	if err := test.Run(); err != nil {
@@ -152,7 +152,116 @@ func runSelfUpgrade(version string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.Command(exe, "upgrade", "--version="+version, "--source=.")
+	cmd := hiddenCmd(exe, "upgrade", "--version="+version, "--source=.")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// cmdRollback reverts the working tree to a previously-built version's
+// commit and rebuilds the binary. The supervisor will pick the new
+// data/versions/vN/agent.exe up on its next swap.
+//
+// Flags:
+//   --version=vN  required
+//   --force       bypass the "working tree is dirty" guard
+func cmdRollback(args []string) error {
+	var version, source string
+	var force bool
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--version" && i+1 < len(args):
+			version = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--version="):
+			version = strings.TrimPrefix(args[i], "--version=")
+		case args[i] == "--source" && i+1 < len(args):
+			source = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--source="):
+			source = strings.TrimPrefix(args[i], "--source=")
+		case args[i] == "--force":
+			force = true
+		}
+	}
+	if version == "" {
+		return fmt.Errorf("--version=vN required")
+	}
+	if source == "" {
+		source = "."
+	}
+
+	commitPath := filepath.Join("data", "versions", version, "commit.txt")
+	commitData, err := os.ReadFile(commitPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", commitPath, err)
+	}
+	sha := strings.TrimSpace(string(commitData))
+	if sha == "" {
+		return fmt.Errorf("empty commit SHA in %s", commitPath)
+	}
+	log.Printf("rollback: target=%s commit=%s", version, sha)
+
+	// Guard: refuse to overwrite uncommitted tracked changes unless --force.
+	if !force {
+		dirty, err := gitTrackedDirty()
+		if err != nil {
+			return fmt.Errorf("git status: %w", err)
+		}
+		if len(dirty) > 0 {
+			return fmt.Errorf("working tree has %d uncommitted tracked change(s); commit/stash first or pass --force:\n  %s",
+				len(dirty), strings.Join(dirty, "\n  "))
+		}
+	}
+
+	if err := gitCheckout(sha); err != nil {
+		return fmt.Errorf("git checkout %s: %w", sha, err)
+	}
+	log.Printf("rollback: working tree reverted to %s", sha[:7])
+
+	outDir := filepath.Join("data", "versions", version)
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+	outPath := filepath.Join(outDir, "agent.exe")
+
+	log.Printf("rollback: rebuilding %s", outPath)
+	build := hiddenCmd("go", "build", "-o", outPath, source)
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("build failed: %w", err)
+	}
+
+	// Smoke-test the freshly-built binary.
+	log.Printf("rollback: smoke-testing new binary")
+	test := hiddenCmd(outPath, "smoke-test")
+	test.Stdout = os.Stdout
+	test.Stderr = os.Stderr
+	if err := test.Run(); err != nil {
+		return fmt.Errorf("smoke-test failed: %w", err)
+	}
+
+	log.Printf("rollback: asking supervisor to swap to %s", version)
+	resp, err := http.Post("http://127.0.0.1:7778/upgrade?v="+version, "", nil)
+	if err != nil {
+		return fmt.Errorf("supervisor not reachable: %w", err)
+	}
+	resp.Body.Close()
+	log.Printf("rollback: signal sent, supervisor will swap")
+	return nil
+}
+
+// runSelfRollback is the Telegram-goroutine wrapper for cmdRollback.
+func runSelfRollback(version string, force bool) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	args := []string{"rollback", "--version=" + version, "--source=."}
+	if force {
+		args = append(args, "--force")
+	}
+	cmd := hiddenCmd(exe, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

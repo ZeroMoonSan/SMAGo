@@ -160,6 +160,32 @@ func (t *Telegram) LongPoll(ctx context.Context) (*TGUpdate, error) {
 	return nil, ctx.Err()
 }
 
+// SendChatAction sends a chat action (typing, upload_photo, etc.) to indicate activity.
+// The action auto-expires after ~5 seconds on Telegram's side.
+func (t *Telegram) SendChatAction(chatID int64, action string) error {
+	v := url.Values{}
+	v.Set("chat_id", fmt.Sprintf("%d", chatID))
+	v.Set("action", action)
+
+	req, err := http.NewRequest("POST",
+		"https://api.telegram.org/bot"+t.token+"/sendChatAction", strings.NewReader(v.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// Typing sends the "typing..." indicator to the chat.
+func (t *Telegram) Typing(chatID int64) error {
+	return t.SendChatAction(chatID, "typing")
+}
+
 func (t *Telegram) Send(chatID int64, text string) error {
 	return t.SendButtons(chatID, text, nil)
 }
@@ -227,6 +253,71 @@ func (t *Telegram) AnswerCallback(callbackID, text string) error {
 	}
 	req, err := http.NewRequest("POST",
 		"https://api.telegram.org/bot"+t.token+"/answerCallbackQuery", strings.NewReader(v.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// BotCommand is a single entry in the bot's "type /" command menu.
+// Passed to SetMyCommands.
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+// SetMyCommands registers the bot's command menu with Telegram. The menu
+// appears next to the input field in the chat UI and lets users discover
+// and pick commands without typing the leading "/".
+func (t *Telegram) SetMyCommands(commands []BotCommand) error {
+	payload, err := json.Marshal(map[string]any{
+		"commands": commands,
+		"scope":    map[string]any{"type": "default"},
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("POST",
+		"https://api.telegram.org/bot"+t.token+"/setMyCommands",
+		strings.NewReader(string(payload)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("setMyCommands HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// EditMessageText replaces the text of an existing message (used to refresh
+// the /rollback version list after a successful rollback).
+func (t *Telegram) EditMessageText(chatID int64, messageID int64, text string, rows [][]InlineButton) error {
+	if len(text) > 4000 {
+		text = text[:4000] + "\n\n[...truncated]"
+	}
+	v := url.Values{}
+	v.Set("chat_id", fmt.Sprintf("%d", chatID))
+	v.Set("message_id", fmt.Sprintf("%d", messageID))
+	v.Set("text", mdToTelegramHTML(text))
+	v.Set("parse_mode", "HTML")
+	if len(rows) > 0 {
+		kb, _ := json.Marshal(map[string]any{"inline_keyboard": rows})
+		v.Set("reply_markup", string(kb))
+	}
+	req, err := http.NewRequest("POST",
+		"https://api.telegram.org/bot"+t.token+"/editMessageText", strings.NewReader(v.Encode()))
 	if err != nil {
 		return err
 	}

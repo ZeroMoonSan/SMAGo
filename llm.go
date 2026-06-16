@@ -11,7 +11,7 @@ import (
 
 type ChatMessage struct {
 	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
+	Content    string     `json:"content"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`
@@ -46,9 +46,27 @@ type ChatResponse struct {
 	Choices []struct {
 		Message ChatMessage `json:"message"`
 	} `json:"choices"`
+	Usage *Usage `json:"usage,omitempty"`
 	Error *struct {
-		Message string `json:"message"`
+		Message string `json:"error"`
 	} `json:"error,omitempty"`
+}
+
+// Usage mirrors the OpenAI `usage` block. Optional — providers that don't
+// return it will leave PromptTokens / CompletionTokens at 0.
+type Usage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+func (u *Usage) Add(other *Usage) {
+	if u == nil || other == nil {
+		return
+	}
+	u.PromptTokens += other.PromptTokens
+	u.CompletionTokens += other.CompletionTokens
+	u.TotalTokens += other.TotalTokens
 }
 
 type LLM struct {
@@ -69,7 +87,7 @@ func NewLLM(cfg *Config) (*LLM, error) {
 	}, nil
 }
 
-func (l *LLM) Chat(messages []ChatMessage, tools []Tool) (*ChatMessage, error) {
+func (l *LLM) Chat(messages []ChatMessage, tools []Tool) (*ChatMessage, *Usage, error) {
 	req := ChatRequest{
 		Model:    l.cfg.DefaultModel,
 		Messages: messages,
@@ -78,7 +96,7 @@ func (l *LLM) Chat(messages []ChatMessage, tools []Tool) (*ChatMessage, error) {
 	}
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Try the user-configured path first, then fall back to common variants.
@@ -89,26 +107,26 @@ func (l *LLM) Chat(messages []ChatMessage, tools []Tool) (*ChatMessage, error) {
 	var lastBody string
 	var lastStatus int
 	for _, p := range paths {
-		msg, status, body, err := l.post(p, body)
+		msg, usage, status, body, err := l.post(p, body)
 		lastErr, lastBody, lastStatus = err, body, status
 		if err == nil {
-			return msg, nil
+			return msg, usage, nil
 		}
 		if status != 404 {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no paths tried")
 	}
-	return nil, fmt.Errorf("status %d: %s (tried: %v, last body: %s)",
+	return nil, nil, fmt.Errorf("status %d: %s (tried: %v, last body: %s)",
 		lastStatus, lastErr, paths, truncate(lastBody, 300))
 }
 
-func (l *LLM) post(path string, body []byte) (*ChatMessage, int, string, error) {
+func (l *LLM) post(path string, body []byte) (*ChatMessage, *Usage, int, string, error) {
 	httpReq, err := http.NewRequest("POST", path, bytes.NewReader(body))
 	if err != nil {
-		return nil, 0, "", err
+		return nil, nil, 0, "", err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if l.provider.APIKey != "" {
@@ -120,33 +138,33 @@ func (l *LLM) post(path string, body []byte) (*ChatMessage, int, string, error) 
 
 	resp, err := l.client.Do(httpReq)
 	if err != nil {
-		return nil, 0, "", err
+		return nil, nil, 0, "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, resp.StatusCode, string(respBody), err
+		return nil, nil, resp.StatusCode, string(respBody), err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, resp.StatusCode, string(respBody),
+		return nil, nil, resp.StatusCode, string(respBody),
 			fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(respBody), 200))
 	}
 
 	var chatResp ChatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, resp.StatusCode, string(respBody),
+		return nil, nil, resp.StatusCode, string(respBody),
 			fmt.Errorf("decode: %w", err)
 	}
 	if chatResp.Error != nil {
-		return nil, resp.StatusCode, string(respBody),
+		return nil, nil, resp.StatusCode, string(respBody),
 			fmt.Errorf("API error: %s", chatResp.Error.Message)
 	}
 	if len(chatResp.Choices) == 0 {
-		return nil, resp.StatusCode, string(respBody),
+		return nil, nil, resp.StatusCode, string(respBody),
 			fmt.Errorf("no choices (body: %s)", truncate(string(respBody), 200))
 	}
-	return &chatResp.Choices[0].Message, resp.StatusCode, string(respBody), nil
+	return &chatResp.Choices[0].Message, chatResp.Usage, resp.StatusCode, string(respBody), nil
 }
 
 // candidatePaths returns a list of URLs to try for chat completions.

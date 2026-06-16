@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type VisionTool struct {
@@ -33,7 +35,7 @@ func (v *VisionTool) Definition() ToolDef {
 	}
 }
 
-func (v *VisionTool) Execute(args map[string]any) (string, error) {
+func (v *VisionTool) Execute(ctx context.Context, args map[string]any) (string, error) {
 	prompt, _ := args["prompt"].(string)
 	imagePath, _ := args["image_path"].(string)
 	if prompt == "" || imagePath == "" {
@@ -58,7 +60,10 @@ func (v *VisionTool) Execute(args map[string]any) (string, error) {
 			return "", fmt.Errorf("webp conversion needed but magick.exe not found at %s", v.MagickExe)
 		}
 		tmp := imagePath + ".converted.png"
-		cmd := exec.Command(v.MagickExe, imagePath, tmp)
+		// Use a context-aware cmd so /abort can kill the conversion.
+		convCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(convCtx, v.MagickExe, imagePath, tmp)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("magick: %v: %s", err, string(out))
 		}
@@ -94,6 +99,8 @@ func (v *VisionTool) Execute(args map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Bind the HTTP call to the caller's ctx so /abort kills in-flight requests.
+	httpReq = httpReq.WithContext(ctx)
 
 	resp, err := defaultHTTP.Do(httpReq)
 	if err != nil {

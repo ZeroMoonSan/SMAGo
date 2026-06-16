@@ -1,6 +1,11 @@
 # Build artefacts
 smago.exe
 smago
+agent.exe
+agent-new.exe
+smago-bg.exe
+supervisor-bg.exe
+*.exe~
 
 # Config with secrets
 config.json
@@ -10,6 +15,12 @@ config.json
 data/sessions.db
 data/sessions.db-*
 data/versions/*
+data/*.log
+data/*.pid
+data/current.json
+data/next.json
+data/bad.json
+data/supervisor.pid
 
 # Editor
 .vscode/
