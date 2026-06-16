@@ -38,6 +38,9 @@ func (r *ToolRegistry) registerDefaults() {
 	ws := &WebSearchTool{}
 	r.tools["web_search"] = ws.Definition()
 
+	// Self-modify: lets the LLM upgrade / rollback / restart itself.
+	r.tools["self_modify"] = (&SelfModifyTool{cfg: r.cfg}).Definition()
+
 	if v := r.cfg.Providers["opencode-go"]; v.BaseURL != "" || os.Getenv("SMAGO_OPENCODE_KEY") != "" {
 		apiKey := v.APIKey
 		if apiKey == "" {

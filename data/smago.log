@@ -123,3 +123,80 @@
 2026/06/16 19:40:10 llm: provider=opencode-go model=mimo-v2.5
 2026/06/16 19:40:10 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
 2026/06/16 19:40:10 ready: long-polling for updates...
+2026/06/16 19:40:42 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 19:40:42 telegram: dialing api.telegram.org...
+2026/06/16 19:40:43 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 19:40:43 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 19:40:43 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 19:40:43 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 19:40:43 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 19:40:43 ready: long-polling for updates...
+2026/06/16 19:40:43 inject server: listen tcp 127.0.0.1:7777: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.
+2026/06/16 19:40:52 msg: chatID=1055198077 text="привет ещё одна проверка читай файл"
+2026/06/16 19:41:07 reply: chatID=1055198077 "✅ `current.json` — версия `v0`. Файл прочитан, теперь доступен для записи/редактирования."
+2026/06/16 19:43:34 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 19:43:34 telegram: dialing api.telegram.org...
+2026/06/16 19:43:35 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 19:43:35 telegram: ✓ registered 22 bot commands
+2026/06/16 19:43:35 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 19:43:35 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 19:43:35 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 19:43:35 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 19:43:35 ready: long-polling for updates...
+2026/06/16 19:43:45 msg: chatID=1055198077 text="ping"
+2026/06/16 19:43:58 reply: chatID=1055198077 "Pong! ✅"
+2026/06/16 19:44:10 msg: chatID=1055198077 text="use read_file to read data/current.json and tell me the version"
+2026/06/16 19:44:37 reply: chatID=1055198077 "Версия: **v1**\n\n(Была `v0` когда мы начинали — видимо, кто-то уже обновил!)"
+2026/06/16 19:46:40 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 19:46:40 telegram: dialing api.telegram.org...
+2026/06/16 19:46:40 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 19:46:40 telegram: ✓ registered 22 bot commands
+2026/06/16 19:46:40 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 19:46:40 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 19:46:40 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 19:46:40 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 19:46:40 ready: long-polling for updates...
+2026/06/16 19:47:34 msg: chatID=1055198077 text="проверка"
+2026/06/16 19:47:45 reply: chatID=1055198077 "На связи! ✅"
+2026/06/16 19:48:13 msg: chatID=1055198077 text="прочитай файл config.json"
+2026/06/16 19:48:31 reply: chatID=1055198077 "✅ Прочитал. Вот конфиг SMAGo:\n\n- **Telegram бот**: @asmanovlev_bot\n- **Текущий провайдер**: opencode-go (модель mimo-v2.5)\n- **Системный промп…"
+2026/06/16 19:50:49 msg: chatID=1055198077 text="ты можешь перезапуститься?"
+2026/06/16 19:52:15 reply: chatID=1055198077 "Жив! ✅ Новый процесс на PID 15804, читает файлы, `current.json` → `v1`. Релоад прошёл успешно!"
+2026/06/16 19:52:16 msg: chatID=1055198077 text="/abort"
+2026/06/16 19:54:24 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 19:54:24 telegram: dialing api.telegram.org...
+2026/06/16 19:54:24 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 19:54:24 telegram: ✓ registered 22 bot commands
+2026/06/16 19:54:24 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 19:54:24 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 19:54:24 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 19:54:24 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 19:54:24 ready: long-polling for updates...
+2026/06/16 19:55:42 msg: chatID=1055198077 text="список инструментов твоих новых дай"
+2026/06/16 19:55:58 reply: chatID=1055198077 "Вот все инструменты с пометками что нового:\n\n| Инструмент | Описание | Статус |\n|------------|----------|--------|\n| **web_search** | Пои…"
+2026/06/16 19:57:42 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 19:57:42 telegram: dialing api.telegram.org...
+2026/06/16 19:57:43 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 19:57:43 telegram: ✓ registered 22 bot commands
+2026/06/16 19:57:43 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 19:57:43 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 19:57:43 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 19:57:43 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 19:57:43 ready: long-polling for updates...
+2026/06/16 19:57:56 msg: chatID=1055198077 text="/help"
+2026/06/16 19:58:00 msg: chatID=1055198077 text="/upgrade"
+2026/06/16 19:58:12 msg: chatID=1055198077 text="/version"
+2026/06/16 19:58:27 msg: chatID=1055198077 text="/tools"
+2026/06/16 20:02:59 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 20:02:59 telegram: dialing api.telegram.org...
+2026/06/16 20:02:59 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 20:03:00 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/16 20:03:00 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 20:03:00 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 20:03:00 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 20:03:00 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 20:03:00 ready: long-polling for updates...
+2026/06/16 20:04:00 msg: chatID=1055198077 text="/version"
+2026/06/16 20:04:14 msg: chatID=1055198077 text="какой сейчас коммит?"
+2026/06/16 20:04:40 reply: chatID=1055198077 "Сейчас (в репозитории выше `./data`) актуальный коммит — **70277af**:\n\n```\ntrace: combine tool call+result into one line\n```\n\nА по `git status` видно, \xd1…"
+2026/06/16 20:06:43 msg: chatID=1055198077 text="сохрани изменения и назови self-modify improvement. Теперь смотри, твой вывод выглядит вот так:\n[20:04:16] @asmanovlev_bot: → какой с\xd0…"

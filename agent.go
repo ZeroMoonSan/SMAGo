@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,10 @@ import (
 // the model can't finish within this many steps it gets a "summarise
 // what you have" prompt and the existing context.
 const defaultMaxSteps = 200
+
+// startedAt is the time the agent process started — used by /version to
+// report uptime. Set in main before RunLoop.
+var startedAt = time.Now()
 
 // runState is the per-chat handle on the currently-running Handle() call.
 // It carries:
@@ -202,7 +207,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	cleanup := a.registerRun(chatID, rs)
 	defer cleanup()
 
-	a.recordTrace(chatID, fmt.Sprintf("→ %s • model=%s • max=%d • tools=%d",
+	a.recordTrace(chatID, fmt.Sprintf("→ %s\nmodel=%s\nmax=%d\ntools=%d",
 		truncateLog(userText, 100), a.cfg.DefaultModel, maxSteps, len(tools)))
 
 	for i := 0; i < maxSteps; i++ {
@@ -229,20 +234,16 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 			return "", err
 		}
 
-		// Format the per-step metrics line.
-		metrics := formatStepMetrics(i+1, maxSteps, a.cfg.DefaultModel, usage, stepDur)
+		// Collect tool result lines so we can emit one multi-line trace
+		// message at the end of the step instead of one message per line.
+		var toolLines []string
 
 		if len(resp.ToolCalls) == 0 {
-			a.recordTrace(chatID, metrics+" → text reply ("+strconv.Itoa(len(resp.Content))+" chars)")
+			a.recordStep(chatID, i+1, maxSteps, a.cfg.DefaultModel, usage, stepDur,
+				nil, len(resp.Content))
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
 			return resp.Content, nil
 		}
-
-		toolNames := make([]string, 0, len(resp.ToolCalls))
-		for _, tc := range resp.ToolCalls {
-			toolNames = append(toolNames, tc.Function.Name)
-		}
-		a.recordTrace(chatID, metrics+" → "+strings.Join(toolNames, " + "))
 
 		_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 
@@ -252,7 +253,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 
 			tdef, ok := a.tools.Get(tc.Function.Name)
 			if !ok {
-				a.recordTrace(chatID, fmt.Sprintf("  ✗ %s: unknown tool", tc.Function.Name))
+				toolLines = append(toolLines, fmt.Sprintf("  ✗ %s: unknown tool", tc.Function.Name))
 				_ = sess.Append(ChatMessage{
 					Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name,
 					Content: "error: unknown tool \"" + tc.Function.Name + "\"",
@@ -261,7 +262,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 			}
 			var args map[string]any
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-				a.recordTrace(chatID, fmt.Sprintf("  ✗ %s: bad args", tc.Function.Name))
+				toolLines = append(toolLines, fmt.Sprintf("  ✗ %s: bad args: %v", tc.Function.Name, err))
 				_ = sess.Append(ChatMessage{
 					Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name,
 					Content: "error: bad arguments: " + err.Error(),
@@ -273,13 +274,16 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 			if err != nil {
 				// /abort returns a context.Canceled error from the tool.
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					a.recordTrace(chatID, fmt.Sprintf("  🛑 %s(%s) cancelled", tc.Function.Name, argStr))
+					// Emit the step trace first so the user sees the tools
+					// that ran, then bail.
+					toolLines = append(toolLines, fmt.Sprintf("  🛑 %s(%s) cancelled", tc.Function.Name, argStr))
+					a.recordStep(chatID, i+1, maxSteps, a.cfg.DefaultModel, usage, stepDur, toolLines, -1)
 					return "🛑 aborted.", nil
 				}
-				a.recordTrace(chatID, fmt.Sprintf("  ✗ %s(%s) → error: %v", tc.Function.Name, argStr, err))
+				toolLines = append(toolLines, fmt.Sprintf("  ✗ %s(%s) → error: %v", tc.Function.Name, argStr, err))
 				out = "error: " + err.Error()
 			} else {
-				a.recordTrace(chatID, fmt.Sprintf("  ✓ %s(%s) → %d chars", tc.Function.Name, argStr, len(out)))
+				toolLines = append(toolLines, fmt.Sprintf("  ✓ %s(%s) → %d chars", tc.Function.Name, argStr, len(out)))
 			}
 			_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 			messages = append(messages,
@@ -287,6 +291,8 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out},
 			)
 		}
+		// One trace message per step, with all tool lines baked in.
+		a.recordStep(chatID, i+1, maxSteps, a.cfg.DefaultModel, usage, stepDur, toolLines, -1)
 	}
 	// Hit the step cap. Ask the model for a best-effort text answer.
 	a.recordTrace(chatID, fmt.Sprintf("✗ hit %d-step cap, asking for best-effort text", maxSteps))
@@ -302,13 +308,18 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	return resp.Content, nil
 }
 
-// formatStepMetrics builds the one-line per-step trace header.
-//
-// ✓ step N/M | model=X | in=Ni out=No total=Nt | tps=T | itps=I otps=O | dur=Ds
+// recordStep emits the per-step trace as a single multi-line Telegram
+// message. The header (step, model, tokens, rates, duration) is followed
+// by one line per tool call (or a single "(text reply, N chars)" line if
+// the model returned no tool calls).
 //
 // All numeric fields are best-effort — providers that don't return usage
 // just show 0.
-func formatStepMetrics(step, max int, model string, usage *Usage, dur time.Duration) string {
+//
+// textReplyLen is used only when toolLines is empty; pass -1 when there
+// were tool calls (otherwise the "(text reply, N chars)" line is appended
+// after the tool lines, which is not what you want).
+func (a *Agent) recordStep(chatID int64, step, max int, model string, usage *Usage, dur time.Duration, toolLines []string, textReplyLen int) {
 	in, out, total := 0, 0, 0
 	if usage != nil {
 		in, out, total = usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens
@@ -326,8 +337,21 @@ func formatStepMetrics(step, max int, model string, usage *Usage, dur time.Durat
 	if secs > 0 && out > 0 {
 		otps = float64(out) / secs
 	}
-	return fmt.Sprintf("✓ step %d/%d | model=%s | in=%d out=%d total=%d | tps=%.1f | itps=%.1f otps=%.1f | dur=%.1fs",
-		step, max, model, in, out, total, tps, itps, otps, secs)
+	var b strings.Builder
+	fmt.Fprintf(&b, "✓ step %d/%d\n", step, max)
+	fmt.Fprintf(&b, "model=%s\n", model)
+	fmt.Fprintf(&b, "in=%d out=%d total=%d\n", in, out, total)
+	fmt.Fprintf(&b, "tps=%.1f itps=%.1f otps=%.1f\n", tps, itps, otps)
+	fmt.Fprintf(&b, "dur=%.1fs", secs)
+	if len(toolLines) > 0 {
+		for _, line := range toolLines {
+			b.WriteString("\n")
+			b.WriteString(line)
+		}
+	} else if textReplyLen >= 0 {
+		fmt.Fprintf(&b, "\n(text reply, %d chars)", textReplyLen)
+	}
+	a.recordTrace(chatID, b.String())
 }
 
 // sendModelGrid sends a message with one inline button per available model.
@@ -555,6 +579,27 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		case text == "/rollback":
 			a.showRollbackMenu(upd.Message.Chat.ID)
 			continue
+		case text == "/list-versions" || text == "/versions":
+			versions, err := listVersions()
+			if err != nil {
+				a.send(upd.Message.Chat.ID, "❌ list: "+err.Error())
+				continue
+			}
+			if len(versions) == 0 {
+				a.send(upd.Message.Chat.ID, "no versions on disk (data/versions/ is empty)")
+				continue
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "📦 %d version(s):\n", len(versions))
+			for _, v := range versions {
+				marker := ""
+				if v.IsCurrent {
+					marker = "  ← current"
+				}
+				fmt.Fprintf(&b, "  %s  %s  %s%s\n", v.Version, v.ShortSHA, v.BuiltAt.Format("2006-01-02 15:04"), marker)
+			}
+			a.send(upd.Message.Chat.ID, strings.TrimRight(b.String(), "\n"))
+			continue
 		case text == "/tools":
 			var b strings.Builder
 			b.WriteString("🛠 Available tools:\n")
@@ -639,7 +684,30 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}(args)
 			continue
 		case text == "/version":
-			a.send(upd.Message.Chat.ID, "smago "+version+", build: "+flagValue("--smago-version"))
+			buildVer := flagValue("--smago-version")
+			if buildVer == "" {
+				buildVer = readCurrentVersion()
+			}
+			sha, _ := gitHead()
+			exe, _ := os.Executable()
+			info, _ := os.Stat(exe)
+			var sizeStr string
+			if info != nil {
+				sizeStr = fmt.Sprintf("%.1f MB", float64(info.Size())/1024/1024)
+			}
+			pid := os.Getpid()
+			uptime := time.Since(startedAt)
+			a.send(upd.Message.Chat.ID, fmt.Sprintf(
+				"smago %s\nbuild: %s\ngit: %s\nbinary: %s (%s)\npid: %d\nuptime: %s",
+				version, buildVer, sha, exe, sizeStr, pid, uptime.Truncate(time.Second)))
+			continue
+		case text == "/restart":
+			a.send(upd.Message.Chat.ID, "🔄 restarting — supervisor will bring me back in a moment")
+			go func() {
+				time.Sleep(500 * time.Millisecond) // let the message flush
+				log.Println("restart: clean exit requested by user")
+				os.Exit(0)
+			}()
 			continue
 		case text == "/trace" || text == "/debug":
 			buf := a.traceBuf[upd.Message.Chat.ID]
