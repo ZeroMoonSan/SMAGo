@@ -642,3 +642,24 @@
 2026/06/17 01:18:06 upgrade: smoke-testing new binary
 2026/06/17 01:18:11 upgrade: asking supervisor to swap to 62e04ca
 2026/06/17 01:18:11 upgrade: signal sent, supervisor will swap
+2026/06/17 01:18:18 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:18:18 telegram: dialing api.telegram.org...
+2026/06/17 01:18:19 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:18:19 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:18:19 mcp: connecting to playwright ...
+2026/06/17 01:18:24 mcp playwright: connected (Playwright)
+2026/06/17 01:18:24 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:18:24 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:18:24 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:18:24 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:18:24 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:18:24 ready: long-polling for updates...
+2026/06/17 01:18:30 msg: chatID=1055198077 text="/version"
+2026/06/17 01:19:00 msg: chatID=1055198077 text="какая версия у тебя сейчас?"
+2026/06/17 01:22:24 err: chatID=1055198077 API error: 
+2026/06/17 01:36:21 msg: chatID=1055198077 text="попробуй ещё раз"
+2026/06/17 01:37:02 upgrade: git HEAD = 2e2b238
+2026/06/17 01:37:02 upgrade: building data\versions\9b88c7a\agent.exe from .
+2026/06/17 01:37:05 upgrade: smoke-testing new binary
+2026/06/17 01:37:10 upgrade: asking supervisor to swap to 9b88c7a
+2026/06/17 01:37:10 upgrade: signal sent, supervisor will swap
