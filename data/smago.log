@@ -736,3 +736,44 @@
 2026/06/17 01:53:07 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
 2026/06/17 01:53:07 ready: long-polling for updates...
 2026/06/17 01:54:44 msg: chatID=1055198077 text="я сам поменял баннер, пересобери"
+2026/06/17 01:57:01 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:57:01 telegram: dialing api.telegram.org...
+2026/06/17 01:57:02 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:57:02 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:57:02 mcp: connecting to playwright ...
+2026/06/17 01:57:05 mcp playwright: connected (Playwright)
+2026/06/17 01:57:05 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:57:05 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:57:05 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:57:05 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:57:05 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:57:05 ready: long-polling for updates...
+2026/06/17 01:57:22 msg: chatID=1055198077 text="ты заманал не обновляться"
+2026/06/17 01:58:07 upgrade: git HEAD = 8f544a5
+2026/06/17 01:58:07 upgrade: building data\versions\2d94813\agent.exe from .
+2026/06/17 01:58:09 upgrade: smoke-testing new binary
+2026/06/17 01:58:14 upgrade: asking supervisor to swap to 2d94813
+2026/06/17 01:58:14 upgrade: signal sent, supervisor will swap
+2026/06/17 01:58:20 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:58:20 telegram: dialing api.telegram.org...
+2026/06/17 01:58:21 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:58:21 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:58:21 mcp: connecting to playwright ...
+2026/06/17 01:58:24 mcp playwright: connected (Playwright)
+2026/06/17 01:58:24 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:58:24 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:58:24 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:58:24 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:58:24 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:58:24 ready: long-polling for updates...
+2026/06/17 02:03:59 msg: chatID=1055198077 text="/sessions"
+2026/06/17 02:04:01 msg: chatID=1055198077 text="/help"
+2026/06/17 02:04:14 msg: chatID=1055198077 text="/trace"
+2026/06/17 02:04:22 msg: chatID=1055198077 text="/gitlog"
+2026/06/17 02:04:25 msg: chatID=1055198077 text="/gitdiff"
+2026/06/17 02:04:57 msg: chatID=1055198077 text="/new"
+2026/06/17 02:06:21 msg: chatID=1055198077 text="1. исследуй проект текущий проект (папкой выше)\n2. исследуй проект https://github.com/Opencode-DCP/opencode-dynamic-context-pruning\n3. составь…"
+2026/06/17 02:10:13 reply: chatID=1055198077 "План готов. Вот краткая сводка:\n\n---\n\n## 📋 План реимплементации DCP в SMAGo\n\n**Файл:** `dcp-plan.md`\n\n### Суть проблемы\nSMAGo не уп\xd1…"
+2026/06/17 02:15:29 msg: chatID=1055198077 text="давай сперва сделаешь управление сессиями, чтобы можно было делать новые и переключаться между старыми. А ещ\xd1…"
+2026/06/17 02:23:26 reply: chatID=1055198077 "Всё собирается чисто. Вот итог:\n\n---\n\n## ✅ Реализовано\n\n### 1. Многопользовательские сессии (`session.go` — полностью пер…"
+2026/06/17 02:25:15 msg: chatID=1055198077 text="а обновиться самому? запиши это тоже в системный промпт."
