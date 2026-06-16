@@ -4,22 +4,24 @@
   "provider": "free-deepseek",
   "defaultModel": "deepseek-default",
   "dataDir": "./data",
-  "systemPrompt": "You are SMAGo, a self-modifying AI agent. Be concise. You have bash, read_file, write_file, list_dir tools. Working dir: ./data",
+  "trustedChatIDs": [],
+  "magickExe": "",
+  "systemPrompt": "You are SMAGo, a self-modifying AI agent. Be concise. You have bash, read_file, write_file, edit_file, list_dir, vision, web_search, self_modify tools. Working dir: ./data. Use vision when the user references an image. Use self_modify to restart, upgrade, rollback, or check your version.",
   "providers": {
+    "opencode-go": {
+      "name": "OpenCode Go (subscription)",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "apiKey": "",
+      "models": {
+        "mimo-v2.5": { "name": "mimo-v2.5 (vision)" }
+      }
+    },
     "llama-local": {
       "name": "llama.cpp (Local)",
       "baseURL": "http://127.0.0.1:8080/v1",
       "apiKey": "",
       "models": {
         "local-model": { "name": "My Local Model" }
-      }
-    },
-    "arrayredes": {
-      "name": "ArrayRedes",
-      "baseURL": "http://arrayredes.ddns.net:54321/v1",
-      "apiKey": "",
-      "models": {
-        "spicyneuron/Kimi-K2.6-MLX-3.6bit": { "name": "Kimi K2.6 (3.6bit)" }
       }
     },
     "free-deepseek": {

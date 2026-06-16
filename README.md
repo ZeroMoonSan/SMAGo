@@ -1,75 +1,171 @@
 # SMAGo — Self-Modifying AI Agent
 
-Lightweight Go agent that talks to you via Telegram, calls an OpenAI-compatible LLM (any of your local/free providers), keeps conversation history in SQLite, and can run shell commands and read/write files.
+Lightweight Go agent that talks to you via Telegram, calls an OpenAI-compatible LLM (any provider), keeps conversation history in SQLite, and can run shell commands, read/write files, and modify its own binary.
+
+## Features
+
+- **Telegram bot** — long-polling, no webhooks needed
+- **Multi-provider LLM** — DeepSeek, llama.cpp, OpenCode, any OpenAI-compatible API
+- **Tool calling** — bash, read/write/edit files, web search, vision
+- **Self-modification** — upgrade, rollback, restart via `self_modify` tool or Telegram commands
+- **Supervisor** — system tray icon, auto-restart on crash, version swap
+- **Markdown rendering** — headings as bold, tables with column alignment, code blocks
+- **Typing indicator** — bot shows "typing..." while processing
+- **Session history** — SQLite-backed, per-chat
+- **Stop/abort** — interrupt long-running tasks gracefully or forcefully
 
 ## Quick start
 
-1. **Build** (Windows):
-   ```cmd
-   build.bat
-   ```
-   Produces `smago.exe` (console, for debugging) and `smago-bg.exe` (silent, for double-click).
+### 1. Build
 
-2. **Fill in `config.json`** — `telegramToken` is already there, set `telegramChatID` to your chat id.
-
-3. **Get your chat id**: run `smago.exe`, write `/chatid` to the bot in Telegram, paste the number it returns into `config.json`. (Or skip this — the bot will only respond to anyone who messages it, but won't proactively send.)
-
-4. **Double-click `smago-bg.exe`** — it runs in the background, no console window. Logs go to `data\smago.log`.
-
-5. **Manage**:
-   - `start-bg.bat` — start in background
-   - `stop.bat` — stop
-   - `data\smago.log` — live logs
-   - `data\sessions.db` — conversation history
-
-## Environment overrides (recommended for secrets)
-
-Keep your token out of `config.json`:
 ```cmd
-set SMAGO_TELEGRAM_TOKEN=6627691089:AAHc37tl0TTVLxTQmz48xLp8KHRCy6aSnOQ
-set SMAGO_TELEGRAM_CHAT_ID=<your chat id>
-smago-bg.exe
+build.bat
 ```
 
-## Commands in Telegram
+Produces:
+- `agent.exe` — console build (for debugging)
+- `smago-bg.exe` — background build (no console window)
+- `supervisor-bg.exe` — supervisor with system tray icon
 
-- `/chatid` — show your chat id
+### 2. Configure
+
+Copy `config.example.json` to `config.json` and fill in:
+- `telegramToken` — get from @BotFather
+- `telegramChatID` — your chat id (run `/chatid` to find it)
+
+### 3. Run
+
+**With supervisor (recommended):**
+```cmd
+start-supervised.bat
+```
+
+**Without supervisor:**
+```cmd
+start-bg.bat
+```
+
+### 4. Manage
+
+| File | Description |
+|------|-------------|
+| `start-bg.bat` | Start in background |
+| `stop.bat` | Stop |
+| `data/smago.log` | Live logs |
+| `data/sessions.db` | Conversation history |
+
+## Telegram Commands
+
+### Conversation
+- `/start` — help message
+- `/new` — start fresh session
+- `/clear` — wipe session history
+- `/stop` — stop after current step (graceful)
+- `/abort` — kill current tool and stop (forceful)
+
+### Configuration
+- `/models` — pick a model (inline buttons)
+- `/model [name]` — show or set model
+- `/provider [name]` — show or set provider
+- `/system [text]` — show or set system prompt
+- `/maxsteps [N]` — tool-call budget (default 200)
+
+### Visibility
 - `/tools` — list available tools
-- `/health` — liveness ping
-- `/clear` — wipe the current session history
+- `/trace` — show last 20 agent actions
+- `/verbose` — toggle inline tool-call traces
+
+### Self-update
+- `/version` — show build version, git SHA, uptime
+- `/upgrade vN` — build and swap to version N
+- `/rollback` — pick a previous version to roll back to
+- `/restart` — restart the agent
+- `/gitsha` — show current git HEAD
+- `/gitlog [N]` — show last N commits
+- `/gitdiff [path]` — show diff
+
+## Tools (for LLM)
+
+| Tool | Description |
+|------|-------------|
+| `bash` | Run shell commands (30s timeout) |
+| `read_file` | Read a file from disk |
+| `write_file` | Write a file (requires read_file first) |
+| `edit_file` | Line-level edits: replace, delete, insert |
+| `list_dir` | List directory contents |
+| `web_search` | Search DuckDuckGo |
+| `vision` | Analyze images (mimo-v2.5) |
+| `self_modify` | Restart, upgrade, rollback, or check version |
+
+### edit_file operations
+
+```json
+// Replace lines 2-4
+{"path": "file.txt", "action": "replace", "start": 2, "end": 4, "content": "new lines"}
+
+// Delete lines 10-15
+{"path": "file.txt", "action": "delete", "start": 10, "end": 15}
+
+// Insert after line 3 (0 = before line 1)
+{"path": "file.txt", "action": "insert", "start": 3, "content": "inserted lines"}
+```
+
+### self_modify actions
+
+```json
+{"action": "list"}                    // List all built versions
+{"action": "current"}                 // Show running version + git SHA
+{"action": "upgrade", "version": "v3"} // Build and swap to v3
+{"action": "rollback", "version": "v2", "force": true} // Roll back to v2
+{"action": "restart"}                 // Clean exit, supervisor restarts
+```
+
+## Architecture
+
+```
+main.go              entry point, signal handling, PID file, logging
+config.go            JSON config with multi-provider support
+llm.go               OpenAI-compatible chat completions client
+telegram.go          long-polling Bot API client (stdlib only, no deps)
+session.go           SQLite store (modernc.org/sqlite, no CGO)
+agent.go             main loop: user msg → LLM → tool calls → response
+tools.go             tool registry: bash, read/write/edit, list_dir
+self_modify_tool.go  self-modification: upgrade, rollback, restart
+markdown.go          Markdown → Telegram HTML (headings, tables, code, bold/italic)
+browser_tool.go      Playwright browser tool (opt-in via env)
+vision.go            image analysis via mimo-v2.5
+web_search_tool.go   DuckDuckGo HTML search
+cmd/supervisor/      system tray supervisor with version management
+```
 
 ## Config search order
 
 1. Path passed as first argument
 2. `$SMAGO_CONFIG`
-3. `<exe-dir>\config.json` or `<exe-dir>\smago.json`
-4. `<cwd>\config.json` or `<cwd>\smago.json`
+3. `<exe-dir>\config.json`
+4. `<cwd>\config.json`
 5. `~/.config/smago/config.json`
 
-## Architecture (MVP)
+## Environment overrides
 
-```
-main.go     entry point, signal handling, PID file, logging
-config.go   JSON config (mirrors your opencode providers)
-llm.go      OpenAI-compatible chat completions client
-telegram.go long-polling Bot API client (stdlib only)
-session.go  SQLite store (modernc.org/sqlite, no CGO)
-tools.go    in-process tools: bash, read_file, write_file, list_dir
-agent.go    main loop: user msg → LLM → tool calls → response
+Keep secrets out of `config.json`:
+```cmd
+set SMAGO_TELEGRAM_TOKEN=your_token
+set SMAGO_TELEGRAM_CHAT_ID=your_chat_id
+set SMAGO_OPENCODE_KEY=your_api_key
 ```
 
-All in a single static binary. No Docker, no WSL, no external services.
+## Version management
 
-## Migrated from opencode
+SMAGo uses a version directory structure:
+```
+data/
+  versions/
+    v0/agent.exe
+    v1/agent.exe
+    v2/agent.exe
+  current.json    {"version": "v1"}
+  next.json       {"version": "v2"} (pending swap)
+```
 
-Pulled your existing providers verbatim from `~/.config/opencode/opencode.json`:
-- `llama-local` → `http://127.0.0.1:8080/v1`
-- `arrayredes` → `http://arrayredes.ddns.net:54321/v1`
-- `free-deepseek` → `http://127.0.0.1:8000/v1`
-
-## Roadmap
-
-- v2: MCP client for hot-loadable tool servers (Playwright, TSU, email, etc.)
-- v2: Self-modification loop — agent writes Go code, compiles, hot-loads MCP server, rolls back on failure
-- v2: Watchdog process — supervisor never modified by agent, restarts on crash
-- v3: TUI / Web UI on top of the same agent core
+The supervisor watches for `next.json` and swaps binaries gracefully. If a version crashes within 20 seconds, it's marked as bad and won't be used again.
