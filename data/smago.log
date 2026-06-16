@@ -622,3 +622,23 @@
 2026/06/17 01:09:49 msg: chatID=1055198077 text="/version"
 2026/06/17 01:10:28 msg: chatID=1055198077 text="/verbose"
 2026/06/17 01:10:29 msg: chatID=1055198077 text="62e04ca это верный коммит? Если да то ты так и не починил форматирование и не сделал verbose: true по умолчанию"
+2026/06/17 01:13:21 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 01:13:21 telegram: dialing api.telegram.org...
+2026/06/17 01:13:22 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 01:13:22 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 01:13:22 mcp: connecting to playwright ...
+2026/06/17 01:13:25 mcp playwright: connected (Playwright)
+2026/06/17 01:13:25 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 01:13:25 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 01:13:25 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 01:13:25 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 01:13:25 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 01:13:25 ready: long-polling for updates...
+2026/06/17 01:16:44 msg: chatID=1055198077 text="/status"
+2026/06/17 01:16:47 msg: chatID=1055198077 text="/version"
+2026/06/17 01:17:19 msg: chatID=1055198077 text=">git 62e04ca\nа обновлять кто будет? зачем я тебе self делал?"
+2026/06/17 01:18:02 upgrade: git HEAD = 9b88c7a
+2026/06/17 01:18:02 upgrade: building data\versions\62e04ca\agent.exe from .
+2026/06/17 01:18:06 upgrade: smoke-testing new binary
+2026/06/17 01:18:11 upgrade: asking supervisor to swap to 62e04ca
+2026/06/17 01:18:11 upgrade: signal sent, supervisor will swap
