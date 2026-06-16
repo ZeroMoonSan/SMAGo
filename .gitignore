@@ -7,6 +7,15 @@ smago-bg.exe
 supervisor-bg.exe
 *.exe~
 
+# DCP research (cloned, not part of project)
+dcp-repo/
+smago
+agent.exe
+agent-new.exe
+smago-bg.exe
+supervisor-bg.exe
+*.exe~
+
 # Config with secrets
 config.json
 *.local.json

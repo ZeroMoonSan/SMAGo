@@ -133,9 +133,19 @@ func truncateLog(s string, n int) string {
 	return s[:n] + "…"
 }
 
-func formatToolCall(name string, args map[string]any, resultLen int, toolErr error) string {
+// formatToolCall renders a single tool call for verbose trace output.
+// annotation is the LLM's preceding text (Content) that explains why it
+// is making this call.
+func formatToolCall(name string, args map[string]any, annotation string, resultLen int, toolErr error) string {
 	var b strings.Builder
 	b.WriteString("**" + name + "**")
+	if annotation != "" {
+		a := strings.TrimSpace(annotation)
+		if len(a) > 200 {
+			a = a[:200] + "…"
+		}
+		b.WriteString("\n📝 " + a)
+	}
 	keys := sortedKeys(args)
 	for i, k := range keys {
 		valStr := fmt.Sprintf("%v", args[k])
@@ -170,8 +180,12 @@ func sortedKeys(m map[string]any) []string {
 	return keys
 }
 
+// ──────────────────────────────────────────────────────
+// Handle — main agent loop for one user message.
+// ──────────────────────────────────────────────────────
+
 func (a *Agent) Handle(chatID int64, userText string) (string, error) {
-	sess, err := a.store.LoadOrCreate(chatID)
+	sess, err := a.store.GetActive(chatID)
 	if err != nil {
 		return "", err
 	}
@@ -256,7 +270,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				toolErr = err
 				out = "error: " + err.Error()
 			}
-			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, len(out), toolErr))
+			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, resp.Content, len(out), toolErr))
 			_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 			messages = append(messages,
 				ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
@@ -324,6 +338,10 @@ func (a *Agent) sendModelGrid(chatID int64) {
 	}
 	a.sendButtons(chatID, fmt.Sprintf("🤖 provider: %s\npick a model:", a.cfg.Provider), rows)
 }
+
+// ──────────────────────────────────────────────────────
+// RunLoop — Telegram polling + command dispatch.
+// ──────────────────────────────────────────────────────
 
 func (a *Agent) RunLoop(ctx context.Context) error {
 	if a.cfg.TelegramChatID != 0 {
@@ -429,6 +447,14 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			case data == "rollback:force":
 				_ = a.tg.AnswerCallback(cq.ID, "force rollback")
 				a.runRollbackFromDirty(chatID, msgID)
+			case strings.HasPrefix(data, "switch:"):
+				name := strings.TrimPrefix(data, "switch:")
+				if err := a.store.SwitchActive(chatID, name); err != nil {
+					a.send(chatID, "❌ "+err.Error())
+				} else {
+					a.send(chatID, "✅ session → "+name)
+				}
+				_ = a.tg.AnswerCallback(cq.ID, "switched")
 			default:
 				_ = a.tg.AnswerCallback(cq.ID, "")
 			}
@@ -468,67 +494,45 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		}
 
 		switch {
+
+		// ── Welcome / help ────────────────────────────
 		case text == "/start":
 			a.send(chatID, "👋 I'm SMAGo.\n\n"+
-				"Conversation:\n/new /clear /stop /abort\n\n"+
+				"Sessions:\n/sessions /new /switch /rename /delete\n\n"+
+				"Conversation:\n/clear /stop /abort\n\n"+
 				"Configuration:\n/models /model /provider /system /maxsteps\n\n"+
 				"Visibility:\n/tools /trace /verbose\n\n"+
 				"Self-update:\n/version /rollback /gitsha /gitlog /gitdiff\n\n"+
 				"Meta:\n/chatid /health /help")
 			continue
 		case text == "/help":
-			a.send(chatID, "/start /help /new /clear /stop /abort\n/models /model /provider /system /maxsteps\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+			a.send(chatID, "/sessions /new /switch /rename /delete\n/clear /stop /abort\n/models /model /provider /system /maxsteps\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+
+		// ── Session management ────────────────────────
+		case text == "/sessions":
+			a.showSessionList(chatID)
 			continue
-		case text == "/models":
-			a.sendModelGrid(chatID)
+		case strings.HasPrefix(text, "/new"):
+			a.handleNewSession(chatID, text)
+			continue
+		case strings.HasPrefix(text, "/switch"):
+			a.handleSwitchSession(chatID, text)
+			continue
+		case strings.HasPrefix(text, "/rename"):
+			a.handleRenameSession(chatID, text)
+			continue
+		case strings.HasPrefix(text, "/delete"):
+			a.handleDeleteSession(chatID, text)
 			continue
 		case text == "/clear":
-			sess, _ := a.store.LoadOrCreate(chatID)
+			sess, _ := a.store.GetActive(chatID)
 			_ = sess.Truncate(0)
 			a.send(chatID, "🗑 session cleared")
 			continue
-		case text == "/new":
-			sess, _ := a.store.LoadOrCreate(chatID)
-			_ = sess.Truncate(0)
-			a.send(chatID, "🆕 new session")
-			continue
-		case text == "/rollback":
-			a.showRollbackMenu(chatID)
-			continue
-		case text == "/list-versions" || text == "/versions":
-			versions, err := listVersions()
-			if err != nil {
-				a.send(chatID, "❌ "+err.Error())
-				continue
-			}
-			if len(versions) == 0 {
-				a.send(chatID, "no versions on disk")
-				continue
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "📦 %d version(s):\n", len(versions))
-			for _, v := range versions {
-				marker := ""
-				if v.IsCurrent {
-					marker = "  ← current"
-				}
-				fmt.Fprintf(&b, "  %s  %s  %s%s\n", v.Version, v.ShortSHA, v.BuiltAt.Format("2006-01-02 15:04"), marker)
-			}
-			a.send(chatID, strings.TrimRight(b.String(), "\n"))
-			continue
-		case text == "/tools":
-			var b strings.Builder
-			b.WriteString("🛠 Available tools:\n")
-			for _, t := range a.tools.All() {
-				b.WriteString("• " + t.Name + " — " + t.Description + "\n")
-			}
-			a.send(chatID, b.String())
-			continue
-		case text == "/health":
-			a.send(chatID, "✅ ok")
-			continue
-		case text == "/chatid":
-			a.send(chatID, fmt.Sprintf("chat.id = %d", chatID))
+
+		// ── Model / provider ──────────────────────────
+		case text == "/models":
+			a.sendModelGrid(chatID)
 			continue
 		case text == "/model" || strings.HasPrefix(text, "/model "):
 			args := strings.TrimSpace(strings.TrimPrefix(text, "/model"))
@@ -568,6 +572,57 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				a.send(chatID, fmt.Sprintf("✅ system prompt updated (%d chars)", len(args)))
 			}
 			continue
+		case text == "/maxsteps" || strings.HasPrefix(text, "/maxsteps "):
+			args := strings.TrimSpace(strings.TrimPrefix(text, "/maxsteps"))
+			if args == "" {
+				cur := defaultMaxSteps
+				if v, ok := a.maxSteps[chatID]; ok {
+					cur = v
+				}
+				a.send(chatID, fmt.Sprintf("max steps: %d (default %d)", cur, defaultMaxSteps))
+				continue
+			}
+			n, err := strconv.Atoi(args)
+			if err != nil || n < 1 {
+				a.send(chatID, "usage: /maxsteps [1-1000]")
+				continue
+			}
+			a.maxSteps[chatID] = n
+			a.send(chatID, fmt.Sprintf("✅ max steps → %d", n))
+			continue
+
+		// ── Visibility ────────────────────────────────
+		case text == "/tools":
+			var b strings.Builder
+			b.WriteString("🛠 Available tools:\n")
+			for _, t := range a.tools.All() {
+				b.WriteString("• " + t.Name + " — " + t.Description + "\n")
+			}
+			a.send(chatID, b.String())
+			continue
+		case text == "/trace" || text == "/debug":
+			buf := a.traceBuf[chatID]
+			if len(buf) == 0 {
+				a.send(chatID, "no agent activity yet")
+				continue
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "🪛 last %d agent actions:\n\n", len(buf))
+			for _, line := range buf {
+				b.WriteString(line + "\n")
+			}
+			a.sendPlain(chatID, b.String())
+			continue
+		case text == "/verbose":
+			a.verbose = !a.verbose
+			if a.verbose {
+				a.send(chatID, "✅ verbose ON — tool annotations shown inline")
+			} else {
+				a.send(chatID, "✅ verbose OFF — traces hidden, use /trace")
+			}
+			continue
+
+		// ── Meta ──────────────────────────────────────
 		case text == "/version":
 			sha, _ := gitHead()
 			exe, _ := os.Executable()
@@ -588,45 +643,14 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				os.Exit(0)
 			}()
 			continue
-		case text == "/trace" || text == "/debug":
-			buf := a.traceBuf[chatID]
-			if len(buf) == 0 {
-				a.send(chatID, "no agent activity yet")
-				continue
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "🪛 last %d agent actions:\n\n", len(buf))
-			for _, line := range buf {
-				b.WriteString(line + "\n")
-			}
-			a.sendPlain(chatID, b.String())
+		case text == "/health":
+			a.send(chatID, "✅ ok")
 			continue
-		case text == "/verbose":
-			a.verbose = !a.verbose
-			if a.verbose {
-				a.send(chatID, "✅ verbose ON — traces shown inline")
-			} else {
-				a.send(chatID, "✅ verbose OFF — traces hidden, use /trace")
-			}
+		case text == "/chatid":
+			a.send(chatID, fmt.Sprintf("chat.id = %d", chatID))
 			continue
-		case text == "/maxsteps" || strings.HasPrefix(text, "/maxsteps "):
-			args := strings.TrimSpace(strings.TrimPrefix(text, "/maxsteps"))
-			if args == "" {
-				cur := defaultMaxSteps
-				if v, ok := a.maxSteps[chatID]; ok {
-					cur = v
-				}
-				a.send(chatID, fmt.Sprintf("max steps: %d (default %d)", cur, defaultMaxSteps))
-				continue
-			}
-			n, err := strconv.Atoi(args)
-			if err != nil || n < 1 {
-				a.send(chatID, "usage: /maxsteps [1-1000]")
-				continue
-			}
-			a.maxSteps[chatID] = n
-			a.send(chatID, fmt.Sprintf("✅ max steps → %d", n))
-			continue
+
+		// ── Git ───────────────────────────────────────
 		case text == "/gitsha" || text == "/githead":
 			sha, err := gitHead()
 			if err != nil {
@@ -664,6 +688,34 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				a.sendPlain(chatID, "📊 diff "+args+":\n\n"+truncateLog(out, 3500))
 			}
 			continue
+
+		// ── Rollback ──────────────────────────────────
+		case text == "/rollback":
+			a.showRollbackMenu(chatID)
+			continue
+		case text == "/list-versions" || text == "/versions":
+			versions, err := listVersions()
+			if err != nil {
+				a.send(chatID, "❌ "+err.Error())
+				continue
+			}
+			if len(versions) == 0 {
+				a.send(chatID, "no versions on disk")
+				continue
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "📦 %d version(s):\n", len(versions))
+			for _, v := range versions {
+				marker := ""
+				if v.IsCurrent {
+					marker = "  ← current"
+				}
+				fmt.Fprintf(&b, "  %s  %s  %s%s\n", v.Version, v.ShortSHA, v.BuiltAt.Format("2006-01-02 15:04"), marker)
+			}
+			a.send(chatID, strings.TrimRight(b.String(), "\n"))
+			continue
+
+		// ── Fallback ──────────────────────────────────
 		case strings.HasPrefix(text, "/"):
 			a.send(chatID, "unknown command: "+text+"\ntype /help")
 			continue
@@ -682,6 +734,133 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		}(chatID, text)
 	}
 }
+
+// ──────────────────────────────────────────────────────
+// Session commands
+// ──────────────────────────────────────────────────────
+
+func (a *Agent) showSessionList(chatID int64) {
+	sessions, err := a.store.ListSessions(chatID)
+	if err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
+	if len(sessions) == 0 {
+		a.send(chatID, "no sessions yet — /new to create one")
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "📂 %d session(s):\n\n", len(sessions))
+	for _, s := range sessions {
+		marker := "  "
+		if s.Active {
+			marker = "✅"
+		}
+		age := humanAge(s.UpdatedAt)
+		fmt.Fprintf(&b, "%s %s — %d msgs, %s\n", marker, s.Name, s.Messages, age)
+	}
+	b.WriteString("\ntap a session to switch:")
+
+	var rows [][]InlineButton
+	for _, s := range sessions {
+		label := s.Name
+		if s.Active {
+			label += " ✅"
+		}
+		if s.Messages > 0 {
+			label += fmt.Sprintf(" (%d)", s.Messages)
+		}
+		if len(label) > 40 {
+			label = label[:40] + "…"
+		}
+		cb := "switch:" + s.Name
+		if s.Active {
+			cb = "noop"
+		}
+		rows = append(rows, []InlineButton{{Text: label, CallbackData: cb}})
+	}
+	a.sendButtons(chatID, b.String(), rows)
+}
+
+func (a *Agent) handleNewSession(chatID int64, text string) {
+	name := strings.TrimSpace(strings.TrimPrefix(text, "/new"))
+	if name == "" {
+		// Generate a name: "new-1", "new-2", etc.
+		sessions, _ := a.store.ListSessions(chatID)
+		n := len(sessions) + 1
+		for {
+			candidate := fmt.Sprintf("new-%d", n)
+			found := false
+			for _, s := range sessions {
+				if s.Name == candidate {
+					found = true
+					break
+				}
+			}
+			if !found {
+				name = candidate
+				break
+			}
+			n++
+		}
+	}
+
+	sess, err := a.store.LoadOrCreate(chatID, name)
+	if err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
+	_ = a.store.SwitchActive(chatID, name)
+	_ = sess
+	a.send(chatID, fmt.Sprintf("🆕 new session: %s\n(active)", name))
+}
+
+func (a *Agent) handleSwitchSession(chatID int64, text string) {
+	name := strings.TrimSpace(strings.TrimPrefix(text, "/switch"))
+	if name == "" {
+		a.showSessionList(chatID)
+		return
+	}
+	if err := a.store.SwitchActive(chatID, name); err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
+	sess, _ := a.store.GetActive(chatID)
+	a.send(chatID, fmt.Sprintf("✅ switched to: %s\n(%d messages)", name, sess.Len()))
+}
+
+func (a *Agent) handleRenameSession(chatID int64, text string) {
+	args := strings.TrimSpace(strings.TrimPrefix(text, "/rename"))
+	parts := strings.Fields(args)
+	if len(parts) < 2 {
+		a.send(chatID, "usage: /rename <old> <new>")
+		return
+	}
+	oldName, newName := parts[0], parts[1]
+	if err := a.store.RenameSession(chatID, oldName, newName); err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
+	a.send(chatID, fmt.Sprintf("✅ renamed: %s → %s", oldName, newName))
+}
+
+func (a *Agent) handleDeleteSession(chatID int64, text string) {
+	name := strings.TrimSpace(strings.TrimPrefix(text, "/delete"))
+	if name == "" {
+		a.send(chatID, "usage: /delete <name>")
+		return
+	}
+	if err := a.store.DeleteSession(chatID, name); err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
+	a.send(chatID, fmt.Sprintf("🗑 deleted session: %s", name))
+}
+
+// ──────────────────────────────────────────────────────
+// Rollback UI
+// ──────────────────────────────────────────────────────
 
 func (a *Agent) showRollbackMenu(chatID int64) {
 	versions, err := listVersions()

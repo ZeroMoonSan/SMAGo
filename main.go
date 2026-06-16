@@ -42,7 +42,6 @@ func main() {
 
 func run() error {
 	logLaunchFlags()
-
 	enableWindowsVT()
 	printBanner(version, os.Stderr)
 
@@ -71,7 +70,6 @@ func run() error {
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return fmt.Errorf("data dir: %w", err)
 	}
-
 	if err := setupLogging(cfg.DataDir); err != nil {
 		return fmt.Errorf("log setup: %w", err)
 	}
@@ -123,8 +121,12 @@ func run() error {
 	cmds := []BotCommand{
 		{Command: "start", Description: "Show welcome & help"},
 		{Command: "help", Description: "Show all commands"},
-		{Command: "new", Description: "Start a fresh session"},
-		{Command: "clear", Description: "Clear session history"},
+		{Command: "sessions", Description: "List all sessions"},
+		{Command: "new", Description: "Create a new session"},
+		{Command: "switch", Description: "Switch to another session"},
+		{Command: "rename", Description: "Rename a session"},
+		{Command: "delete", Description: "Delete a session"},
+		{Command: "clear", Description: "Clear current session"},
 		{Command: "models", Description: "Pick a model (inline buttons)"},
 		{Command: "model", Description: "Show or set the current model"},
 		{Command: "provider", Description: "Show or set the current provider"},
@@ -132,7 +134,7 @@ func run() error {
 		{Command: "maxsteps", Description: "Show or set the tool-call budget"},
 		{Command: "tools", Description: "List available tools"},
 		{Command: "trace", Description: "Show the last agent actions"},
-		{Command: "verbose", Description: "Toggle inline tool-call traces"},
+		{Command: "verbose", Description: "Toggle inline traces + tool annotations"},
 		{Command: "stop", Description: "Stop the current task after this step"},
 		{Command: "abort", Description: "Force-stop the current task (kills tools)"},
 		{Command: "rollback", Description: "Roll back to a previous version"},
