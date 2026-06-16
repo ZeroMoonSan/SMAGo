@@ -290,3 +290,15 @@
 2026/06/16 20:37:09 reply: chatID=1055198077 "Готово! Бинарник собран без ошибок. Теперь нужно сделать релоад чтобы новый бинарник подхватился:\n\n- `/restart` в Tel…"
 2026/06/16 20:37:10 msg: chatID=1055198077 text="/abort"
 2026/06/16 20:37:18 msg: chatID=1055198077 text="/upgrade v2"
+2026/06/16 20:37:29 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 20:37:29 telegram: dialing api.telegram.org...
+2026/06/16 20:37:29 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 20:37:30 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/16 20:37:30 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 20:37:30 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 20:37:30 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 20:37:30 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 20:37:30 ready: long-polling for updates...
+2026/06/16 20:37:47 msg: chatID=1055198077 text="проверка новых трейсов, попробуй прочитать файл"
+2026/06/16 20:38:18 reply: chatID=1055198077 "✅ `current.json` — версия **v2**.\n\nПроверь step-трейс в Telegram — теперь он должен выглядеть так:\n\n```\n✓ step 1/200\nin=... out=... total=...\ntps=.…"
+2026/06/16 20:39:16 msg: chatID=1055198077 text="красота\n✓ step 1/200\nin=178658 out=49 total=178707\ntps=10135.5 itps=10132.7 otps=2.8\ndur=17.6s\n  ✓ read_file(map[path:current.json]) → 16 chars\n\nкстати, а можно... Что же…"
