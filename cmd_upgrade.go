@@ -104,6 +104,16 @@ func cmdUpgrade(args []string) error {
 	}
 	outPath := filepath.Join(outDir, "agent.exe")
 
+	// Step 0: commit current source so this version is associated with a
+	// specific git revision. The user can roll back to it later.
+	sha, commitErr := gitCommitAll("upgrade: build " + version)
+	if commitErr != nil {
+		log.Printf("upgrade: git commit failed (continuing): %v", commitErr)
+	} else {
+		log.Printf("upgrade: git HEAD = %s", sha)
+		_ = os.WriteFile(filepath.Join(outDir, "commit.txt"), []byte(sha+"\n"), 0644)
+	}
+
 	log.Printf("upgrade: building %s from %s", outPath, source)
 
 	// Step 1: build.

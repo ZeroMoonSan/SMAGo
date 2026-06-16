@@ -9,3 +9,15 @@
 2026/06/16 16:22:39 ready: long-polling for updates...
 2026/06/16 16:22:44 msg: chatID=1055198077 text="/version"
 2026/06/16 16:22:53 msg: chatID=1055198077 text="/upgrade v1"
+2026/06/16 16:24:38 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 16:24:38 pid file: 0x7ff62e641e40
+2026/06/16 16:24:38 telegram: dialing api.telegram.org...
+2026/06/16 16:24:38 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 16:24:38 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 16:24:38 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 16:24:38 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 16:24:38 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 16:24:38 ready: long-polling for updates...
+2026/06/16 16:24:42 msg: chatID=1055198077 text="/version"
+2026/06/16 16:24:54 msg: chatID=1055198077 text="/upgrade v2"
+2026/06/16 16:25:14 msg: chatID=1055198077 text="/version"

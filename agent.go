@@ -400,6 +400,45 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		case text == "/version":
 			a.send(upd.Message.Chat.ID, "smago "+version+", build: "+flagValue("--smago-version"))
 			continue
+		case text == "/gitsha" || text == "/githead":
+			sha, err := gitHead()
+			if err != nil {
+				a.send(upd.Message.Chat.ID, "❌ git: "+err.Error())
+			} else {
+				a.send(upd.Message.Chat.ID, "🔖 HEAD: "+sha)
+			}
+			continue
+		case text == "/gitlog" || strings.HasPrefix(text, "/gitlog "):
+			args := strings.TrimPrefix(text, "/gitlog")
+			args = strings.TrimSpace(args)
+			n := 10
+			if args != "" {
+				fmt.Sscanf(args, "%d", &n)
+			}
+			if n < 1 || n > 50 {
+				n = 10
+			}
+			out, err := gitLog(n)
+			if err != nil {
+				a.send(upd.Message.Chat.ID, "❌ git log: "+err.Error())
+			} else if out == "" {
+				a.send(upd.Message.Chat.ID, "no commits yet")
+			} else {
+				a.sendPlain(upd.Message.Chat.ID, "📜 last "+fmt.Sprintf("%d", n)+" commits:\n\n"+out)
+			}
+			continue
+		case text == "/gitdiff" || strings.HasPrefix(text, "/gitdiff "):
+			args := strings.TrimPrefix(text, "/gitdiff")
+			args = strings.TrimSpace(args)
+			out, err := gitDiff(args)
+			if err != nil {
+				a.send(upd.Message.Chat.ID, "❌ git diff: "+err.Error())
+			} else if out == "" {
+				a.send(upd.Message.Chat.ID, "no diff")
+			} else {
+				a.sendPlain(upd.Message.Chat.ID, "📊 diff "+args+":\n\n"+truncateLog(out, 3500))
+			}
+			continue
 		case strings.HasPrefix(text, "/"):
 			a.send(upd.Message.Chat.ID, "unknown command: "+text+"\ntype /help")
 			continue
