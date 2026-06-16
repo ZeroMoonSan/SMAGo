@@ -311,3 +311,13 @@
 2026/06/16 20:43:04 upgrade: smoke-testing new binary
 2026/06/16 20:43:05 upgrade: asking supervisor to swap to v3
 2026/06/16 20:43:05 upgrade: signal sent, supervisor will swap
+2026/06/16 20:43:12 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/16 20:43:12 telegram: dialing api.telegram.org...
+2026/06/16 20:43:12 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/16 20:43:12 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/16 20:43:12 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/16 20:43:12 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/16 20:43:12 llm: provider=opencode-go model=mimo-v2.5
+2026/06/16 20:43:12 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/16 20:43:12 ready: long-polling for updates...
+2026/06/16 20:45:11 msg: chatID=1055198077 text="ну вот видишь, всё ты можешь. Давай это... Надо бы вылечить пару моментов - надо чтобы работали команды /abort и что…"
