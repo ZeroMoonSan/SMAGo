@@ -13,16 +13,11 @@ import (
 	"time"
 )
 
-// defaultMaxSteps caps the tool-call iterations per user message. If
-// the model can't finish within this many steps it gets a "summarise
-// what you have" prompt and the existing context.
+// defaultMaxSteps caps the tool-call iterations per user message.
 const defaultMaxSteps = 200
 
-// startedAt is the time the agent process started — used by /version to
-// report uptime. Set in main before RunLoop.
 var startedAt = time.Now()
 
-// runState is the per-chat handle on the currently-running Handle() call.
 type runState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -136,13 +131,6 @@ func (a *Agent) sendPlain(chatID int64, text string) {
 	}
 }
 
-func (a *Agent) trace(chatID int64, text string) {
-	if !a.verbose {
-		return
-	}
-	a.sendPlain(chatID, text)
-}
-
 func (a *Agent) typing(chatID int64) {
 	_ = a.tg.Typing(chatID)
 }
@@ -202,6 +190,10 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		resp, usage, err := a.llm.Chat(messages, tools)
 		stepDur := time.Since(stepStart)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				a.recordTrace(chatID, "🛑 aborted")
+				return "🛑 aborted.", nil
+			}
 			a.recordTrace(chatID, fmt.Sprintf("  ✗ LLM error: %v", err))
 			return "", err
 		}
@@ -209,8 +201,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		var toolLines []string
 
 		if len(resp.ToolCalls) == 0 {
-			a.recordStep(chatID, i+1, maxSteps, usage, stepDur,
-				nil, len(resp.Content))
+			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content))
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
 			return resp.Content, nil
 		}
@@ -273,7 +264,6 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	return resp.Content, nil
 }
 
-// recordStep emits the per-step trace as a single multi-line Telegram message.
 func (a *Agent) recordStep(chatID int64, step, max int, usage *Usage, dur time.Duration, toolLines []string, textReplyLen int) {
 	in, out, total := 0, 0, 0
 	if usage != nil {
@@ -457,9 +447,37 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 
 		log.Printf("msg: chatID=%d text=%q", upd.Message.Chat.ID, truncateLog(text, 200))
 
+		chatID := upd.Message.Chat.ID
+
+		// Handle /stop and /abort even while a task is running
+		switch {
+		case text == "/stop":
+			if rs := a.getRun(chatID); rs != nil {
+				rs.Stop()
+				a.send(chatID, "⏹ <i>stopping after current step…</i>")
+			} else {
+				a.send(chatID, "no task in progress")
+			}
+			continue
+		case text == "/abort":
+			if rs := a.getRun(chatID); rs != nil {
+				rs.Abort()
+				a.send(chatID, "🛑 <i>aborted</i>")
+			} else {
+				a.send(chatID, "no task in progress")
+			}
+			continue
+		}
+
+		// If a task is already running for this chat, send "busy" hint
+		if rs := a.getRun(chatID); rs != nil {
+			a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
+			continue
+		}
+
 		switch {
 		case text == "/start":
-			a.send(upd.Message.Chat.ID,
+			a.send(chatID,
 				"👋 I'm SMAGo.\n\n"+
 					"Conversation:\n"+
 					"/new — start a fresh session\n"+
@@ -487,7 +505,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 					"/help — short command list")
 			continue
 		case text == "/help":
-			a.send(upd.Message.Chat.ID,
+			a.send(chatID,
 				"/start /help /new /clear /stop /abort\n"+
 					"/models /model /provider /system /maxsteps\n"+
 					"/tools /trace /verbose\n"+
@@ -495,45 +513,29 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 					"/chatid /health")
 			continue
 		case text == "/models":
-			a.sendModelGrid(upd.Message.Chat.ID)
+			a.sendModelGrid(chatID)
 			continue
 		case text == "/clear":
-			sess, _ := a.store.LoadOrCreate(upd.Message.Chat.ID)
+			sess, _ := a.store.LoadOrCreate(chatID)
 			_ = sess.Truncate(0)
-			a.send(upd.Message.Chat.ID, "🗑 session cleared")
+			a.send(chatID, "🗑 session cleared")
 			continue
 		case text == "/new":
-			sess, _ := a.store.LoadOrCreate(upd.Message.Chat.ID)
+			sess, _ := a.store.LoadOrCreate(chatID)
 			_ = sess.Truncate(0)
-			a.send(upd.Message.Chat.ID, "🆕 new session — send your first message")
-			continue
-		case text == "/stop":
-			if rs := a.getRun(upd.Message.Chat.ID); rs != nil {
-				rs.Stop()
-				a.send(upd.Message.Chat.ID, "⏹ <i>stopping after current step…</i>")
-			} else {
-				a.send(upd.Message.Chat.ID, "no task in progress")
-			}
-			continue
-		case text == "/abort":
-			if rs := a.getRun(upd.Message.Chat.ID); rs != nil {
-				rs.Abort()
-				a.send(upd.Message.Chat.ID, "🛑 <i>aborted</i>")
-			} else {
-				a.send(upd.Message.Chat.ID, "no task in progress")
-			}
+			a.send(chatID, "🆕 new session — send your first message")
 			continue
 		case text == "/rollback":
-			a.showRollbackMenu(upd.Message.Chat.ID)
+			a.showRollbackMenu(chatID)
 			continue
 		case text == "/list-versions" || text == "/versions":
 			versions, err := listVersions()
 			if err != nil {
-				a.send(upd.Message.Chat.ID, "❌ list: "+err.Error())
+				a.send(chatID, "❌ list: "+err.Error())
 				continue
 			}
 			if len(versions) == 0 {
-				a.send(upd.Message.Chat.ID, "no versions on disk (data/versions/ is empty)")
+				a.send(chatID, "no versions on disk (data/versions/ is empty)")
 				continue
 			}
 			var b strings.Builder
@@ -545,7 +547,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				}
 				fmt.Fprintf(&b, "  %s  %s  %s%s\n", v.Version, v.ShortSHA, v.BuiltAt.Format("2006-01-02 15:04"), marker)
 			}
-			a.send(upd.Message.Chat.ID, strings.TrimRight(b.String(), "\n"))
+			a.send(chatID, strings.TrimRight(b.String(), "\n"))
 			continue
 		case text == "/tools":
 			var b strings.Builder
@@ -553,30 +555,25 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			for _, t := range a.tools.All() {
 				b.WriteString("• " + t.Name + " — " + t.Description + "\n")
 			}
-			a.send(upd.Message.Chat.ID, b.String())
+			a.send(chatID, b.String())
 			continue
 		case text == "/health":
-			a.send(upd.Message.Chat.ID, "✅ ok")
+			a.send(chatID, "✅ ok")
 			continue
 		case text == "/chatid":
-			a.send(upd.Message.Chat.ID, fmt.Sprintf("chat.id = %d", upd.Message.Chat.ID))
+			a.send(chatID, fmt.Sprintf("chat.id = %d", chatID))
 			continue
 		case text == "/model" || strings.HasPrefix(text, "/model "):
 			args := strings.TrimPrefix(text, "/model")
 			args = strings.TrimSpace(args)
 			if args == "" {
-				a.send(upd.Message.Chat.ID, "current model: "+a.cfg.DefaultModel)
+				a.send(chatID, "current model: "+a.cfg.DefaultModel)
 			} else {
 				if _, ok := a.cfg.Providers[a.cfg.Provider]; ok {
-					if _, hasModel := a.cfg.Providers[a.cfg.Provider].Models[args]; hasModel || args != "" {
-						a.cfg.DefaultModel = args
-						a.send(upd.Message.Chat.ID, "✅ model set to "+args)
-					} else {
-						a.send(upd.Message.Chat.ID, "⚠️ model not in provider catalog, set anyway: "+args)
-						a.cfg.DefaultModel = args
-					}
+					a.cfg.DefaultModel = args
+					a.send(chatID, "✅ model set to "+args)
 				} else {
-					a.send(upd.Message.Chat.ID, "❌ no provider selected")
+					a.send(chatID, "❌ no provider selected")
 				}
 			}
 			continue
@@ -589,13 +586,13 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				for name := range a.cfg.Providers {
 					b.WriteString("  • " + name + "\n")
 				}
-				a.send(upd.Message.Chat.ID, b.String())
+				a.send(chatID, b.String())
 			} else {
 				if _, ok := a.cfg.Providers[args]; ok {
 					a.cfg.Provider = args
-					a.send(upd.Message.Chat.ID, "✅ provider set to "+args)
+					a.send(chatID, "✅ provider set to "+args)
 				} else {
-					a.send(upd.Message.Chat.ID, "❌ unknown provider: "+args)
+					a.send(chatID, "❌ unknown provider: "+args)
 				}
 			}
 			continue
@@ -607,27 +604,27 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				if len(preview) > 1500 {
 					preview = preview[:1500] + "…"
 				}
-				a.send(upd.Message.Chat.ID, "current system prompt:\n\n"+preview)
+				a.send(chatID, "current system prompt:\n\n"+preview)
 			} else {
 				a.cfg.SystemPrompt = args
-				a.send(upd.Message.Chat.ID, "✅ system prompt updated ("+fmt.Sprintf("%d", len(args))+" chars)")
+				a.send(chatID, "✅ system prompt updated ("+fmt.Sprintf("%d", len(args))+" chars)")
 			}
 			continue
 		case text == "/upgrade" || strings.HasPrefix(text, "/upgrade "):
 			args := strings.TrimPrefix(text, "/upgrade")
 			args = strings.TrimSpace(args)
 			if args == "" {
-				a.send(upd.Message.Chat.ID, "usage: /upgrade vN\ncurrent: "+flagValue("--smago-version"))
+				a.send(chatID, "usage: /upgrade vN\ncurrent: "+flagValue("--smago-version"))
 				continue
 			}
-			a.send(upd.Message.Chat.ID, "🔨 building "+args+"...")
+			a.send(chatID, "🔨 building "+args+"...")
 			go func(v string) {
 				out, err := runSelfUpgrade(v)
 				if err != nil {
-					a.send(upd.Message.Chat.ID, "❌ upgrade failed: "+err.Error()+"\n\n"+truncateLog(out, 1500))
+					a.send(chatID, "❌ upgrade failed: "+err.Error()+"\n\n"+truncateLog(out, 1500))
 					return
 				}
-				a.send(upd.Message.Chat.ID, "✅ upgrade "+v+" sent to supervisor\n\n"+truncateLog(out, 1000))
+				a.send(chatID, "✅ upgrade "+v+" sent to supervisor\n\n"+truncateLog(out, 1000))
 			}(args)
 			continue
 		case text == "/version":
@@ -644,12 +641,12 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}
 			pid := os.Getpid()
 			uptime := time.Since(startedAt)
-			a.send(upd.Message.Chat.ID, fmt.Sprintf(
+			a.send(chatID, fmt.Sprintf(
 				"smago %s\nbuild: %s\ngit: %s\nbinary: %s (%s)\npid: %d\nuptime: %s",
 				version, buildVer, sha, exe, sizeStr, pid, uptime.Truncate(time.Second)))
 			continue
 		case text == "/restart":
-			a.send(upd.Message.Chat.ID, "🔄 restarting — supervisor will bring me back in a moment")
+			a.send(chatID, "🔄 restarting — supervisor will bring me back in a moment")
 			go func() {
 				time.Sleep(500 * time.Millisecond)
 				log.Println("restart: clean exit requested by user")
@@ -657,9 +654,9 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}()
 			continue
 		case text == "/trace" || text == "/debug":
-			buf := a.traceBuf[upd.Message.Chat.ID]
+			buf := a.traceBuf[chatID]
 			if len(buf) == 0 {
-				a.send(upd.Message.Chat.ID, "no agent activity yet — send any message first")
+				a.send(chatID, "no agent activity yet — send any message first")
 				continue
 			}
 			var b strings.Builder
@@ -667,14 +664,14 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			for _, line := range buf {
 				b.WriteString(line + "\n")
 			}
-			a.sendPlain(upd.Message.Chat.ID, b.String())
+			a.sendPlain(chatID, b.String())
 			continue
 		case text == "/verbose" || text == "/quiet":
 			a.verbose = !a.verbose
 			if a.verbose {
-				a.send(upd.Message.Chat.ID, "✅ verbose ON — tool calls will be shown inline")
+				a.send(chatID, "✅ verbose ON — tool calls will be shown inline")
 			} else {
-				a.send(upd.Message.Chat.ID, "✅ verbose OFF — only final answers")
+				a.send(chatID, "✅ verbose OFF — only final answers")
 			}
 			continue
 		case text == "/maxsteps" || strings.HasPrefix(text, "/maxsteps "):
@@ -682,26 +679,26 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			args = strings.TrimSpace(args)
 			if args == "" {
 				cur := defaultMaxSteps
-				if v, ok := a.maxSteps[upd.Message.Chat.ID]; ok {
+				if v, ok := a.maxSteps[chatID]; ok {
 					cur = v
 				}
-				a.send(upd.Message.Chat.ID, fmt.Sprintf("max steps: %d (default %d)", cur, defaultMaxSteps))
+				a.send(chatID, fmt.Sprintf("max steps: %d (default %d)", cur, defaultMaxSteps))
 				continue
 			}
 			n, err := strconv.Atoi(args)
 			if err != nil || n < 1 {
-				a.send(upd.Message.Chat.ID, "usage: /maxsteps [1-1000]")
+				a.send(chatID, "usage: /maxsteps [1-1000]")
 				continue
 			}
-			a.maxSteps[upd.Message.Chat.ID] = n
-			a.send(upd.Message.Chat.ID, fmt.Sprintf("✅ max steps set to %d for this chat", n))
+			a.maxSteps[chatID] = n
+			a.send(chatID, fmt.Sprintf("✅ max steps set to %d for this chat", n))
 			continue
 		case text == "/gitsha" || text == "/githead":
 			sha, err := gitHead()
 			if err != nil {
-				a.send(upd.Message.Chat.ID, "❌ git: "+err.Error())
+				a.send(chatID, "❌ git: "+err.Error())
 			} else {
-				a.send(upd.Message.Chat.ID, "🔖 HEAD: "+sha)
+				a.send(chatID, "🔖 HEAD: "+sha)
 			}
 			continue
 		case text == "/gitlog" || strings.HasPrefix(text, "/gitlog "):
@@ -716,11 +713,11 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}
 			out, err := gitLog(n)
 			if err != nil {
-				a.send(upd.Message.Chat.ID, "❌ git log: "+err.Error())
+				a.send(chatID, "❌ git log: "+err.Error())
 			} else if out == "" {
-				a.send(upd.Message.Chat.ID, "no commits yet")
+				a.send(chatID, "no commits yet")
 			} else {
-				a.sendPlain(upd.Message.Chat.ID, "📜 last "+fmt.Sprintf("%d", n)+" commits:\n\n"+out)
+				a.sendPlain(chatID, "📜 last "+fmt.Sprintf("%d", n)+" commits:\n\n"+out)
 			}
 			continue
 		case text == "/gitdiff" || strings.HasPrefix(text, "/gitdiff "):
@@ -728,28 +725,31 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			args = strings.TrimSpace(args)
 			out, err := gitDiff(args)
 			if err != nil {
-				a.send(upd.Message.Chat.ID, "❌ git diff: "+err.Error())
+				a.send(chatID, "❌ git diff: "+err.Error())
 			} else if out == "" {
-				a.send(upd.Message.Chat.ID, "no diff")
+				a.send(chatID, "no diff")
 			} else {
-				a.sendPlain(upd.Message.Chat.ID, "📊 diff "+args+":\n\n"+truncateLog(out, 3500))
+				a.sendPlain(chatID, "📊 diff "+args+":\n\n"+truncateLog(out, 3500))
 			}
 			continue
 		case strings.HasPrefix(text, "/"):
-			a.send(upd.Message.Chat.ID, "unknown command: "+text+"\ntype /help")
+			a.send(chatID, "unknown command: "+text+"\ntype /help")
 			continue
 		}
 
-		a.typing(upd.Message.Chat.ID)
+		a.typing(chatID)
 
-		reply, err := a.Handle(upd.Message.Chat.ID, text)
-		if err != nil {
-			log.Printf("err: chatID=%d %v", upd.Message.Chat.ID, err)
-			a.send(upd.Message.Chat.ID, "❌ "+err.Error())
-			continue
-		}
-		log.Printf("reply: chatID=%d %q", upd.Message.Chat.ID, truncateLog(reply, 200))
-		a.send(upd.Message.Chat.ID, reply)
+		// Run Handle in a goroutine so RunLoop stays responsive to /abort and /stop
+		go func(cid int64, msg string) {
+			reply, err := a.Handle(cid, msg)
+			if err != nil {
+				log.Printf("err: chatID=%d %v", cid, err)
+				a.send(cid, "❌ "+err.Error())
+				return
+			}
+			log.Printf("reply: chatID=%d %q", cid, truncateLog(reply, 200))
+			a.send(cid, reply)
+		}(chatID, text)
 	}
 }
 

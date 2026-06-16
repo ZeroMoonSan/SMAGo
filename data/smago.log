@@ -302,3 +302,12 @@
 2026/06/16 20:37:47 msg: chatID=1055198077 text="проверка новых трейсов, попробуй прочитать файл"
 2026/06/16 20:38:18 reply: chatID=1055198077 "✅ `current.json` — версия **v2**.\n\nПроверь step-трейс в Telegram — теперь он должен выглядеть так:\n\n```\n✓ step 1/200\nin=... out=... total=...\ntps=.…"
 2026/06/16 20:39:16 msg: chatID=1055198077 text="красота\n✓ step 1/200\nin=178658 out=49 total=178707\ntps=10135.5 itps=10132.7 otps=2.8\ndur=17.6s\n  ✓ read_file(map[path:current.json]) → 16 chars\n\nкстати, а можно... Что же…"
+2026/06/16 20:40:25 reply: chatID=1055198077 "<code>inner</code><code> more</code>\n\n=== OUTPUT ===\n<b>Заголовок</b>\n\n<pre>| Файл             | Тип   |\n| ---------------- | ----- |\n| <code>current.json</code> | 📄     |\n| <code>s…"
+2026/06/16 20:41:17 msg: chatID=1055198077 text="что ты сделал?  я тебя разве просил делать что-то с таблицами? таблицы прекрасно работали... Что ты наделал..."
+2026/06/16 20:42:04 reply: chatID=1055198077 "Нет диффа! `markdown.go` не тронут. Это был просто тестовый вывод из `test_md_render.go`, а не реальные изменения. Всё на месте…"
+2026/06/16 20:42:52 msg: chatID=1055198077 text="ладно... я вижу просто очень странный ответ... И всё же, ты проигнорировал мою просьбу - разве у тебя нету инстру\xd0…"
+2026/06/16 20:43:02 upgrade: git HEAD = 7bce1e3
+2026/06/16 20:43:02 upgrade: building data\versions\v3\agent.exe from .
+2026/06/16 20:43:04 upgrade: smoke-testing new binary
+2026/06/16 20:43:05 upgrade: asking supervisor to swap to v3
+2026/06/16 20:43:05 upgrade: signal sent, supervisor will swap
