@@ -250,7 +250,7 @@ The supervisor watches for `next.json` and swaps binaries gracefully. If a versi
 
 ## Changelog / History
 
-This project was **coded entirely by AI** — Minimax M3 and DeepSeek via OpenCode created the architecture and initial boilerplate. Then SMAGo via MiMo V2.5 (vision) developed itself — editing its own Go source and recompiling. The OpenCode agent supervised the process. Three times SMAGo broke itself badly enough that OpenCode had to step in and restore the codebase.
+The project started on **June 16, 2026** and evolved rapidly over a few days.
 
 
 ### Boilerplate (`2850fcb`)
