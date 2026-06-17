@@ -131,7 +131,7 @@ func cmdUpgrade(args []string) error {
 
 	log.Printf("upgrade: building %s from %s", outPath, source)
 
-	build := hiddenCmd("go", "build", "-o", outPath, "./"+filepath.Base(source))
+	build := hiddenCmd("go", "build", "-o", outPath, ".")
 	build.Dir = source
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
@@ -227,7 +227,7 @@ func cmdRollback(args []string) error {
 	outPath := filepath.Join(outDir, "agent.exe")
 
 	log.Printf("rollback: rebuilding %s", outPath)
-	build := hiddenCmd("go", "build", "-o", outPath, "./"+filepath.Base(source))
+	build := hiddenCmd("go", "build", "-o", outPath, ".")
 	build.Dir = source
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
