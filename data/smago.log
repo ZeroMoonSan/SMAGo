@@ -1291,3 +1291,6 @@
 2026/06/18 05:04:56 msg: chatID=1055198077 text="альясы ещё сделай /del /sw"
 2026/06/18 05:08:35 reply: chatID=1055198077 "Код уже закоммичен (`d803de2`). Вот итог изменений:\n\n**Изменения в `agent.go`:**\n1. `/clear` — **удалён** полностью\n2. `/new` — добав\xd0…"
 2026/06/18 05:09:07 msg: chatID=1055198077 text="да"
+2026/06/18 05:09:23 upgrade: git HEAD = b86c333
+2026/06/18 05:09:23 upgrade: building data\versions\d803de2\agent.exe from src
+2026/06/18 05:09:25 upgrade: smoke-testing new binary
