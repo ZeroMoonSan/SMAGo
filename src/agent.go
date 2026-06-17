@@ -557,8 +557,12 @@ func (a *Agent) handleDCPCommand(chatID int64, text string) {
 	case "off":
 		a.cfg.DCP.Enabled = false
 		a.send(chatID, "✅ DCP disabled")
+	case "reset":
+		a.dcpStates[chatID] = NewDCPState()
+		a.saveDCPState(chatID, a.dcpStates[chatID])
+		a.send(chatID, "🔄 DCP state reset — compressed ranges cleared")
 	default:
-		a.send(chatID, "usage:\n/dcp — status\n/dcp on — enable\n/dcp off — disable")
+		a.send(chatID, "usage:\n/dcp — status\n/dcp on — enable\n/dcp off — disable\n/dcp reset — clear compressed ranges")
 	}
 }
 

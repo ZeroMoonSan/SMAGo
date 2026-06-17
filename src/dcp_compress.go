@@ -104,6 +104,14 @@ func execCompress(_ context.Context, args map[string]any, dcp *DCPState, sessLen
 
 	dcp.TotalPrunedTokens += totalSaved
 
+	// Merge overlapping compressed ranges to prevent context bloat
+	mergeOverlappingRanges(dcp)
+
+	// Cap: if too many ranges, merge into a single meta-summary
+	if activeRanges(dcp) > 5 {
+		metaSummarize(dcp)
+	}
+
 	var out strings.Builder
 	out.WriteString("\U0001f4e6 *Context compressed*\n")
 	out.WriteString(fmt.Sprintf("\u251c Ranges: %d\n", len(ca.Ranges)))
