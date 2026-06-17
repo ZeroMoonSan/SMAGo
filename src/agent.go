@@ -736,7 +736,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		case text == "/start":
 			a.send(chatID, "👋 I'm SMAGo.\n\n"+
 				"Sessions:\n/sessions /new /switch /rename /delete\n\n"+
-				"Conversation:\n/clear /stop /abort\n\n"+
+			"Conversation:\n/clear /stop /abort /compress\n\n"+
 				"Configuration:\n/models /model /provider /system /maxsteps /shell\n\n"+
 				"Context:\n/dcp\n\n"+
 				"Visibility:\n/tools /trace /verbose\n\n"+
@@ -744,10 +744,43 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				"Meta:\n/chatid /health /help")
 			continue
 		case text == "/help":
-			a.send(chatID, "/sessions /new /switch /rename /delete\n/clear /stop /abort\n/models /model /provider /system /maxsteps /shell\n/dcp\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+			a.send(chatID, "👋 *SMAGo Commands*\n\n"+
+				"*Sessions:*\n"+
+				"/sessions — list all sessions\n"+
+				"/new — create a new session\n"+
+				"/switch — switch to another session\n"+
+				"/rename — rename a session\n"+
+				"/delete — delete a session\n\n"+
+				"*Conversation:*\n"+
+				"/clear — clear current session\n"+
+				"/stop — stop the current task after this step\n"+
+				"/abort — force-stop the current task\n"+
+				"/compress — compress conversation context\n\n"+
+				"*Configuration:*\n"+
+				"/models — pick a model (inline buttons)\n"+
+				"/model — show or set the current model\n"+
+				"/provider — show or set the current provider\n"+
+				"/system — show or set the system prompt\n"+
+				"/maxsteps — show or set the tool-call budget\n"+
+				"/shell — show or change the terminal shell\n\n"+
+				"*Context:*\n"+
+				"/dcp — Dynamic Context Pruning status/config\n\n"+
+				"*Visibility:*\n"+
+				"/tools — list available tools\n"+
+				"/trace — show the last agent actions\n"+
+				"/verbose — toggle inline traces\n\n"+
+				"*Self-update:*\n"+
+				"/version — show build version\n"+
+				"/rollback — roll back to a previous version\n"+
+				"/gitsha — show the current commit\n"+
+				"/gitlog — show recent commits\n"+
+				"/gitdiff — show working-tree diff\n\n"+
+				"*Meta:*\n"+
+				"/chatid — show this chat's id\n"+
+				"/health — liveness check")
 			continue
 
-		// ── DCP ──────────────────────────────────────
+
 		// ── DCP ──────────────────────────────────────
 		case text == "/dcp" || strings.HasPrefix(text, "/dcp "):
 			a.handleDCPCommand(chatID, text)

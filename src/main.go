@@ -149,6 +149,7 @@ func run() error {
 		{Command: "gitdiff", Description: "Show working-tree diff"},
 		{Command: "health", Description: "Liveness check"},
 		{Command: "chatid", Description: "Show this chat's id"},
+		{Command: "compress", Description: "Compress conversation context"},
 		{Command: "dcp", Description: "Dynamic Context Pruning status/config"},
 	}
 	if err := tg.SetMyCommands(cmds); err != nil {
