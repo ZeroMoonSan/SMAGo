@@ -1039,3 +1039,26 @@
 2026/06/17 15:23:00 reply: chatID=1055198077 "Готово! Вот что сделано:\n\n### 1. Retry для `deadline exceeded` (`agent.go`)\n\nВ `isRetryableError` добавлены 3 новых паттерна:\n\n```go\n\"strings.Contains(msg,…"
 2026/06/17 15:28:06 msg: chatID=1055198077 text="/dcp"
 2026/06/17 15:28:29 msg: chatID=1055198077 text="ну теперь пора обновиться"
+2026/06/17 15:28:55 upgrade: git HEAD = fb05f7f
+2026/06/17 15:28:55 upgrade: building data\versions\1675a7f\agent.exe from src
+2026/06/17 15:31:01 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 15:31:01 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 15:31:01 migrate: sessions.name (expected if already exists): SQL logic error: duplicate column name: name (1)
+2026/06/17 15:31:01 telegram: dialing api.telegram.org...
+2026/06/17 15:31:02 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 15:31:02 telegram: ✓ registered 30 bot commands
+2026/06/17 15:31:02 mcp: connecting to playwright ...
+2026/06/17 15:31:04 mcp playwright: connected (Playwright)
+2026/06/17 15:31:04 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 15:31:04 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 15:31:04 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 15:31:04 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 15:31:04 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 15:31:04 ready: long-polling for updates...
+2026/06/17 15:45:03 msg: chatID=1055198077 text="/compress"
+2026/06/17 15:45:11 msg: chatID=1055198077 text="./compress"
+2026/06/17 15:54:42 msg: chatID=1055198077 text="/stop"
+2026/06/17 15:54:43 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 15:56:30 msg: chatID=1055198077 text="а это нормально что ты уже /compress делаешь уже 36 шагов? Давай ты посмотришь что не так, и пофиксишь ещё вывод dcp. В …"
+2026/06/17 16:11:52 reply: chatID=1055198077 "Подведу итог — что исправлено:\n\n**Баг 1: Бесконечный compress loop** — LLM вызывал compress, результат шёл в tool message, но `messages`…"
+2026/06/17 17:45:53 msg: chatID=1055198077 text="да, вполне можно"
