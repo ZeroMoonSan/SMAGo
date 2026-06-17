@@ -716,9 +716,19 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		}
 
 		if rs := a.getRun(chatID); rs != nil {
-			a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
-			continue
+			switch {
+			case text == "/help", text == "/health", text == "/chatid", text == "/version",
+				text == "/trace", text == "/debug", text == "/tools", text == "/verbose",
+				text == "/compress",
+				text == "/sessions",
+				text == "/dcp" || strings.HasPrefix(text, "/dcp "):
+				// whitelisted — fall through
+			default:
+				a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
+				continue
+			}
 		}
+
 
 		switch {
 
