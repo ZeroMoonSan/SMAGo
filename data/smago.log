@@ -919,3 +919,53 @@
 2026/06/17 13:18:17 reply: chatID=1055198077 "Готово! Вот итог:\n\n### Что сделано\n\n**1. Retry при HTTP ошибках (503, 502, 429, 500, EOF)**\n- До 4 повторных попыток с интервалом 15 се\xd0…"
 2026/06/17 13:18:51 msg: chatID=1055198077 text="/upgrade"
 2026/06/17 13:19:00 msg: chatID=1055198077 text="сделай апгрейд"
+2026/06/17 13:19:50 upgrade: git HEAD = d99057d
+2026/06/17 13:19:50 upgrade: building data\versions\d99057d\agent.exe from .
+2026/06/17 13:19:52 upgrade: smoke-testing new binary
+2026/06/17 13:20:12 upgrade: asking supervisor to swap to d99057d
+2026/06/17 13:20:12 upgrade: signal sent, supervisor will swap
+2026/06/17 13:20:19 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 13:20:19 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 13:20:19 migrate: sessions.name: SQL logic error: duplicate column name: name (1)
+2026/06/17 13:20:19 telegram: dialing api.telegram.org...
+2026/06/17 13:20:20 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 13:20:20 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 13:20:20 mcp: connecting to playwright ...
+2026/06/17 13:20:22 mcp playwright: connected (Playwright)
+2026/06/17 13:20:22 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 13:20:22 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 13:20:22 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 13:20:22 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 13:20:22 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 13:20:22 ready: long-polling for updates...
+2026/06/17 13:21:00 msg: chatID=1055198077 text="/help"
+2026/06/17 13:21:04 msg: chatID=1055198077 text="/dcp"
+2026/06/17 13:21:26 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:21:30 msg: chatID=1055198077 text="/abort"
+2026/06/17 13:21:33 reply: chatID=1055198077 "👋 Я SMAGo.\n\n**Sessions:**\n/sessions /new /switch /rename /delete\n\n**Conversation:**\n/clear /stop /abort\n\n**Configuration:**\n/models /model /provider /system /maxsteps /shell\n\n**Context:**\n/dcp\n\n**…"
+2026/06/17 13:21:45 msg: chatID=1055198077 text="/dcp"
+2026/06/17 13:21:49 msg: chatID=1055198077 text="/dcp"
+2026/06/17 13:21:52 msg: chatID=1055198077 text="/dcp on"
+2026/06/17 13:22:06 msg: chatID=1055198077 text="d99057d верный коммит? Давай посмотрим появится ли сейчас у тебя dcp"
+2026/06/17 13:22:48 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:22:52 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 13:23:27 msg: chatID=1055198077 text="📦 DCP: OFF\n\nDCP: 0 compressed blocks, 0 deduped, 0 pending errors, ~0 tokens saved\ntokens now: ~242985\nmodel context: 131k\nmin (20%): 26k\nmax (80%): 104k\nturn: 1\nэээ? 104K? Mimo v2.5 имеет …"
+2026/06/17 13:24:31 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:24:40 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 13:24:44 msg: chatID=1055198077 text="если что endpoint zen сейчас не нужен"
+2026/06/17 13:25:35 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:25:52 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 13:26:15 msg: chatID=1055198077 text="почему остальные 128K У каждой модели же свои лимиты, дипсик тоже 1М, бесплатный дипсик 250к или 256к не помню точно…"
+2026/06/17 13:30:19 reply: chatID=1055198077 "`config.json` в `.gitignore` (содержит токены) — это правильно. Изменение уже на диске, вступит в силу при следующем запус\xd0…"
+2026/06/17 13:31:28 msg: chatID=1055198077 text="могу также попросить - а можешь исходники мигрировать в папку src? а то рабочая папка уже слишком забита. Кстати…"
+2026/06/17 13:38:10 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:38:23 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 13:38:25 msg: chatID=1055198077 text="Directory: C:\\Users\\User\\Desktop\\SMAGo\n\n\nMode                 LastWriteTime         Length Name\n----                 -------------         ------ ----\nd-----        16.06.2026     19:15               …"
+2026/06/17 13:43:49 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:43:55 reply: chatID=1055198077 "Итого по уборке:\n\n**Удалено:**\n- `pkg/`, `tools/` — пустые\n- `dcp-repo/` — клонированный референс\n- `agent-new.exe`, `supervisor.exe~` — мусор…"
+2026/06/17 13:44:00 msg: chatID=1055198077 text="возможно нужно обновить супервизор, я его сам вручную перезапущу"
+2026/06/17 13:44:47 msg: chatID=1055198077 text="/stop"
+2026/06/17 13:44:52 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 13:45:43 msg: chatID=1055198077 text="я если что запускаю через supervisor_bg.exe, я закрыл супервизор теперь все файлы кроме agent должны быть разблокирован\xd1…"
+2026/06/17 13:54:52 reply: chatID=1055198077 "Готово! Чистая сборка. Структура теперь:\n\n```\nSMAGo/\n├── src/              # все .go исходники + go.mod + cmd/\n├── bin/              # exe фа…"
+2026/06/17 13:56:26 msg: chatID=1055198077 text="ну теперь запусти апгрейд"

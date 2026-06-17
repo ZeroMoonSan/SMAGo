@@ -1,27 +1,21 @@
-# Build artefacts
-smago.exe
-smago
-agent.exe
-agent-new.exe
-smago-bg.exe
-supervisor-bg.exe
-*.exe~
+# Build artefacts (in bin/)
+bin/*.exe
+bin/*.exe~
 
-# DCP research (cloned, not part of project)
-dcp-repo/
-smago
-agent.exe
-agent-new.exe
-smago-bg.exe
-supervisor-bg.exe
-*.exe~
+# Runtime data
+data/sessions.db
+data/*.pid
+data/current.json
+data/next.json
+data/bad.json
+data/supervisor.pid
+data/smago.log
+data/sessions.db.bak
 
 # Config with secrets
 config.json
 *.local.json
 
-# Runtime data
-data/sessions.db
 # Editor
 .vscode/
 .idea/
@@ -33,12 +27,3 @@ data/sessions.db
 _counttemp.go
 _gofiles.txt
 count_test.go
-data/*.pid
-data/current.json
-data/next.json
-data/bad.json
-data/supervisor.pid
-
-# Editor
-.vscode/
-.idea/

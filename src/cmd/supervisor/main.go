@@ -1,9 +1,3 @@
-// supervisor watches the agent, swaps versions on demand, rolls back on crash.
-//
-// HTTP API on 127.0.0.1:7778:
-//   POST /upgrade?v=vN    signal supervisor to swap on next cycle
-//   POST /rebuild         rebuild agent from source and swap
-//   GET  /health          return "ok"
 package main
 
 import (
@@ -43,6 +37,16 @@ var (
 	versionItem *systray.MenuItem
 )
 
+// sourceRoot finds the directory containing go.mod (where .go files live).
+func sourceRoot() string {
+	for _, candidate := range []string{"src", ".", ".."} {
+		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
+			return candidate
+		}
+	}
+	return "."
+}
+
 func main() {
 	runtime.LockOSThread()
 
@@ -56,12 +60,12 @@ func main() {
 }
 
 func onReady() {
-	iconPath := "smago.ico"
-	if _, err := os.Stat(iconPath); err == nil {
-		icon, _ := os.ReadFile(iconPath)
-		if len(icon) > 0 {
-			systray.SetIcon(icon)
-		}
+	iconPath := filepath.Join("bin", "smago.ico")
+	if _, err := os.Stat(iconPath); err != nil {
+		iconPath = "smago.ico"
+	}
+	if icon, err := os.ReadFile(iconPath); err == nil && len(icon) > 0 {
+		systray.SetIcon(icon)
 	}
 	systray.SetTitle("SMAGo")
 	systray.SetTooltip("SMAGo supervisor")
@@ -80,7 +84,6 @@ func onReady() {
 	mRestart := systray.AddMenuItem("Restart agent", "restart agent")
 	systray.AddSeparator()
 
-	// Rollback sub-menu — last 10 git commits as clickable items.
 	mRollback := systray.AddMenuItem("Rollback...", "pick a previous commit to roll back to")
 	rebuildRollbackMenu(mRollback)
 	systray.AddSeparator()
@@ -169,7 +172,8 @@ func runSupervisor() {
 		os.MkdirAll(outDir, 0755)
 		outPath := outDir + "/" + exeName
 
-		build := exec.Command("go", "build", "-o", outPath, ".")
+		src := sourceRoot()
+		build := exec.Command("go", "build", "-o", outPath, "./"+src)
 		build.Stdout = os.Stdout
 		build.Stderr = os.Stderr
 		build.Env = augmentPath(os.Environ())
@@ -372,9 +376,6 @@ func markBad(v string) {
 	_ = os.WriteFile(badFile, []byte(fmt.Sprintf(`{"version":%q}`, v)), 0644)
 }
 
-// latestVersionDir scans data/versions/ and returns the name of the most
-// recently modified sub-directory that contains an agent.exe. Returns ""
-// if the directory is empty or no sub-directory has an agent.exe.
 func latestVersionDir() string {
 	root := "data/versions"
 	entries, err := os.ReadDir(root)
@@ -403,13 +404,7 @@ func latestVersionDir() string {
 	return bestName
 }
 
-// rebuildRollbackMenu clears and repopulates the given parent menu item
-// with one sub-item per commit in the last 10 git log entries. Each
-// sub-item, when clicked, spawns a goroutine that checks out the commit,
-// rebuilds the agent, and asks the supervisor to swap.
 func rebuildRollbackMenu(parent *systray.MenuItem) {
-	// We can't remove existing sub-items from a parent, so we add fresh
-	// ones. The menu is built once at startup.
 	commits := gitLog10()
 	if len(commits) == 0 {
 		empty := parent.AddSubMenuItem("no git commits found", "")
@@ -417,19 +412,15 @@ func rebuildRollbackMenu(parent *systray.MenuItem) {
 		return
 	}
 	for i, c := range commits {
-		// Escape the label for display: max ~50 chars.
 		label := c.short + " " + c.summary
 		if len(label) > 55 {
 			label = label[:55] + "..."
 		}
-		// The first commit (HEAD) shows "current" instead of being a
-		// rollback target.
 		tip := ""
 		if i == 0 {
 			tip = " (current)"
 		}
 		item := parent.AddSubMenuItem(label+tip, "rollback to commit "+c.short)
-		// Capture the SHA for the closure.
 		sha := c.short
 		summary := c.summary
 		item.Click(func() {
@@ -448,7 +439,6 @@ type gitCommit struct {
 	summary string
 }
 
-// gitLog10 returns the short SHA and subject of the last 10 commits.
 func gitLog10() []gitCommit {
 	out, err := exec.Command("git", "log", "--oneline", "-10").Output()
 	if err != nil {
@@ -468,24 +458,20 @@ func gitLog10() []gitCommit {
 	return commits
 }
 
-// doRollback reverts the working tree to the given SHA, rebuilds the
-// agent, puts the new binary in data/versions/<sha>/, and signals the
-// supervisor to swap. This runs on a background goroutine (triggered by
-// the tray click).
 func doRollback(sha, summary string) error {
-	// git checkout
 	cmd := exec.Command("git", "checkout", sha)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git checkout %s: %w", sha, err)
 	}
-	// build
+
 	outDir := filepath.Join("data", "versions", sha)
 	_ = os.MkdirAll(outDir, 0755)
 	outPath := filepath.Join(outDir, exeName)
 
-	build := exec.Command("go", "build", "-o", outPath, ".")
+	src := sourceRoot()
+	build := exec.Command("go", "build", "-o", outPath, "./"+src)
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	build.Env = augmentPath(os.Environ())
@@ -494,9 +480,6 @@ func doRollback(sha, summary string) error {
 	}
 	_ = os.WriteFile(filepath.Join(outDir, "commit.txt"), []byte(sha+"\n"), 0644)
 
-	// Smoke-test skipped — tray rollback is a power-user move.
-
-	// Signal swap.
 	select {
 	case upgradeCh <- sha:
 	default:

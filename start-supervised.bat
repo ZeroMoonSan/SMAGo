@@ -1,6 +1,8 @@
 @echo off
-REM Starts SMAGo silently with a system tray icon. Always does a clean
-REM restart — kills any prior supervisor-bg and agent processes first.
-REM See restart.bat for the kill logic.
-
-call "%~dp0restart.bat" %*
+if not exist bin\supervisor-bg.exe (
+  echo bin\supervisor-bg.exe not found. Run build.bat first.
+  pause
+  exit /b 1
+)
+start "" bin\supervisor-bg.exe
+echo Started SMAGo supervisor.

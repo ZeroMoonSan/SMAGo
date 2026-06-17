@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -68,7 +67,7 @@ func (s *SelfModifyTool) Execute(ctx context.Context, args map[string]any) (stri
 	case "restart":
 		return s.actionRestart()
 	default:
-		return "", fmt.Errorf("unknown action %q (use list, current, upgrade, rollback, restart)", action)
+		return "", fmt.Errorf("unknown action %q", action)
 	}
 }
 
@@ -78,7 +77,7 @@ func (s *SelfModifyTool) actionList() (string, error) {
 		return "", fmt.Errorf("list: %w", err)
 	}
 	if len(versions) == 0 {
-		return "no versions on disk (data/versions/ is empty)", nil
+		return "no versions on disk", nil
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "available versions (%d):\n", len(versions))
@@ -98,18 +97,8 @@ func (s *SelfModifyTool) actionCurrent() (string, error) {
 	exe = filepath.Base(exe)
 	uptime := time.Since(startedAt).Truncate(time.Second)
 	var b strings.Builder
-	fmt.Fprintf(&b, "git:  %s\n", sha)
-	fmt.Fprintf(&b, "exe:  %s\n", exe)
-	fmt.Fprintf(&b, "pid:  %d\n", os.Getpid())
-	fmt.Fprintf(&b, "up:   %s", uptime)
+	fmt.Fprintf(&b, "git:  %s\nexe:  %s\npid:  %d\nup:   %s", sha, exe, os.Getpid(), uptime)
 	return b.String(), nil
-}
-
-// writeRestartMsg saves a message to be shown after restart.
-func writeRestartMsg(chatID int64, msg string) {
-	data := map[string]any{"chat_id": chatID, "message": msg}
-	b, _ := json.Marshal(data)
-	_ = os.WriteFile("data/restart_msg.json", b, 0644)
 }
 
 func (s *SelfModifyTool) actionUpgrade(ctx context.Context, args map[string]any) (string, error) {
@@ -124,16 +113,16 @@ func (s *SelfModifyTool) actionUpgrade(ctx context.Context, args map[string]any)
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if err := cmdUpgrade([]string{"--version=" + version, "--source=."}); err != nil {
+	if err := cmdUpgrade([]string{"--version=" + version}); err != nil {
 		return "", fmt.Errorf("upgrade %s: %w", version, err)
 	}
-	return fmt.Sprintf("upgrade %s sent to supervisor; it'll swap in a moment", version), nil
+	return fmt.Sprintf("upgrade %s sent to supervisor", version), nil
 }
 
 func (s *SelfModifyTool) actionRollback(ctx context.Context, args map[string]any) (string, error) {
 	version, _ := args["version"].(string)
 	if version == "" {
-		return "", fmt.Errorf("version is required for rollback (use action=list to see available)")
+		return "", fmt.Errorf("version required (use action=list)")
 	}
 	force, _ := args["force"].(bool)
 	if !force {
@@ -142,28 +131,27 @@ func (s *SelfModifyTool) actionRollback(ctx context.Context, args map[string]any
 			return "", fmt.Errorf("git status: %w", err)
 		}
 		if len(dirty) > 0 {
-			return "", fmt.Errorf("working tree has %d uncommitted change(s); pass force=true to override:\n  %s",
-				len(dirty), strings.Join(dirty, "\n  "))
+			return "", fmt.Errorf("working tree dirty (%d changes); pass force=true", len(dirty))
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	argv := []string{"--version=" + version, "--source=."}
+	argv := []string{"--version=" + version}
 	if force {
 		argv = append(argv, "--force")
 	}
 	if err := cmdRollback(argv); err != nil {
 		return "", fmt.Errorf("rollback %s: %w", version, err)
 	}
-	return fmt.Sprintf("rollback %s sent to supervisor; it'll swap in a moment", version), nil
+	return fmt.Sprintf("rollback %s sent to supervisor", version), nil
 }
 
 func (s *SelfModifyTool) actionRestart() (string, error) {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		log.Println("self_modify: clean exit requested by tool call")
+		log.Println("self_modify: clean exit requested")
 		os.Exit(0)
 	}()
-	return "restart scheduled - supervisor will bring a fresh process up in ~1s", nil
+	return "restart scheduled", nil
 }

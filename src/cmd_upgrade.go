@@ -67,10 +67,31 @@ func cmdSmokeTest() error {
 	return nil
 }
 
-// cmdUpgrade builds a new agent binary, runs a smoke test, and asks the
-// supervisor to swap to it. Args:
-//   --version=SHA         git commit SHA (short or full)
-//   --source=path         optional, defaults to "."
+// findSourceRoot finds the directory containing go.mod.
+func findSourceRoot() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "src"
+	}
+	dir := filepath.Dir(exe)
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	for _, candidate := range []string{"src", ".", ".."} {
+		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
+			return candidate
+		}
+	}
+	return "src"
+}
+
 func cmdUpgrade(args []string) error {
 	var version, source string
 	for i := 0; i < len(args); i++ {
@@ -91,7 +112,7 @@ func cmdUpgrade(args []string) error {
 		return fmt.Errorf("--version=SHA required")
 	}
 	if source == "" {
-		source = "."
+		source = findSourceRoot()
 	}
 
 	outDir := filepath.Join("data", "versions", version)
@@ -100,8 +121,6 @@ func cmdUpgrade(args []string) error {
 	}
 	outPath := filepath.Join(outDir, "agent.exe")
 
-	// Step 0: commit current source so this version is associated with a
-	// specific git revision.
 	sha, commitErr := gitCommitAll("upgrade: build " + version)
 	if commitErr != nil {
 		log.Printf("upgrade: git commit failed (continuing): %v", commitErr)
@@ -112,7 +131,8 @@ func cmdUpgrade(args []string) error {
 
 	log.Printf("upgrade: building %s from %s", outPath, source)
 
-	build := hiddenCmd("go", "build", "-o", outPath, source)
+	build := hiddenCmd("go", "build", "-o", outPath, "./"+filepath.Base(source))
+	build.Dir = source
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -142,7 +162,7 @@ func runSelfUpgrade(version string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cmd := hiddenCmd(exe, "upgrade", "--version="+version, "--source=.")
+	cmd := hiddenCmd(exe, "upgrade", "--version="+version)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -170,7 +190,7 @@ func cmdRollback(args []string) error {
 		return fmt.Errorf("--version=SHA required")
 	}
 	if source == "" {
-		source = "."
+		source = findSourceRoot()
 	}
 
 	commitPath := filepath.Join("data", "versions", version, "commit.txt")
@@ -207,7 +227,8 @@ func cmdRollback(args []string) error {
 	outPath := filepath.Join(outDir, "agent.exe")
 
 	log.Printf("rollback: rebuilding %s", outPath)
-	build := hiddenCmd("go", "build", "-o", outPath, source)
+	build := hiddenCmd("go", "build", "-o", outPath, "./"+filepath.Base(source))
+	build.Dir = source
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
@@ -237,7 +258,7 @@ func runSelfRollback(version string, force bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	args := []string{"rollback", "--version=" + version, "--source=."}
+	args := []string{"rollback", "--version=" + version}
 	if force {
 		args = append(args, "--force")
 	}
