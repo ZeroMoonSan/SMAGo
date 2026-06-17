@@ -37,6 +37,37 @@ var (
 	versionItem *systray.MenuItem
 )
 
+// chdirToProjectRoot changes the working directory to the project root
+// (the parent of the bin/ directory where supervisor runs from, or the
+// first ancestor containing src/go.mod). This lets supervisor-bg.exe be
+// launched from anywhere — CWD is always the SMAGo project root.
+func chdirToProjectRoot() {
+	exe, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(exe) // e.g. D:\...\SMAGo\bin
+		parent := filepath.Dir(dir)
+		if _, err := os.Stat(filepath.Join(parent, "src", "go.mod")); err == nil {
+			if err := os.Chdir(parent); err == nil {
+				return
+			}
+		}
+		// try the exe dir itself
+		if _, err := os.Stat(filepath.Join(dir, "src", "go.mod")); err == nil {
+			if err := os.Chdir(dir); err == nil {
+				return
+			}
+		}
+	}
+	// fallback: walk up from CWD
+	for _, candidate := range []string{".", "..", "../..", "../../.."} {
+		if _, err := os.Stat(filepath.Join(candidate, "src", "go.mod")); err == nil {
+			abs, _ := filepath.Abs(candidate)
+			_ = os.Chdir(abs)
+			return
+		}
+	}
+}
+
 // sourceRoot finds the directory containing go.mod (where .go files live).
 func sourceRoot() string {
 	for _, candidate := range []string{"src", ".", ".."} {
@@ -49,6 +80,8 @@ func sourceRoot() string {
 
 func main() {
 	runtime.LockOSThread()
+
+	chdirToProjectRoot()
 
 	mustExist("data")
 	mustExist("data/versions")
