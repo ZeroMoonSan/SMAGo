@@ -186,14 +186,14 @@ func truncateLog(s string, n int) string {
 // formatToolCall renders a single tool call for verbose trace output.
 func formatToolCall(name string, args map[string]any, annotation string, resultLen int, toolErr error) string {
 	var b strings.Builder
-	b.WriteString("**" + name + "**")
 	if annotation != "" {
 		a := strings.TrimSpace(annotation)
 		if len(a) > 200 {
 			a = a[:200] + "…"
 		}
-		b.WriteString("\n📝 " + a)
+		b.WriteString(a + "\n")
 	}
+	b.WriteString("**" + name + "**")
 	keys := sortedKeys(args)
 	for i, k := range keys {
 		valStr := fmt.Sprintf("%v", args[k])
