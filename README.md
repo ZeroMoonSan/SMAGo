@@ -4,7 +4,7 @@ A lightweight Go agent that communicates via Telegram, calls any OpenAI-compatib
 
 SMAGo runs as a Windows system tray application with a supervisor that auto-restarts on crash and manages hot-swap upgrades.
 
-> **Built entirely by AI.** The codebase was written by Minimax M3 and DeepSeek. MiMo V2.5 (vision) and the OpenCode agent iterated on it, tested features, and refined the architecture. Human role: idea, direction, code review.
+> **Built entirely by AI.** Minimax M3 and DeepSeek wrote the codebase. MiMo V2.5 (vision) and the OpenCode agent iterated on it, tested features, and refined the architecture. Human role: idea, direction, code review.
 
 ## Features
 
@@ -251,7 +251,7 @@ This project was **coded entirely by AI** — Minimax M3 and DeepSeek wrote the 
 
 ### Boilerplate (`2850fcb`)
 
-The initial working prototype, written in a single session:
+The initial working prototype, written in a single session by Minimax M3 and DeepSeek:
 
 - **Telegram bot** via long-polling (stdlib `net/http`, zero external deps)
 - **LLM** — OpenAI-compatible chat completions (talked to local llama.cpp, self-hosted endpoints, OpenCode)
@@ -265,51 +265,28 @@ The initial working prototype, written in a single session:
 
 Providers were migrated from the author's `opencode.json`: local llama.cpp, a home server, and a self-hosted DeepSeek proxy.
 
-### Git integration & self-upgrade (`34ede0a`)
+### Self-driven development (`34ede0a` — `0001437`)
 
-Added `git.go` — the agent could read git history, show diffs, and use commit SHAs as version identifiers.
+From this point on, **SMAGo developed itself**. Each feature, fix, and refactor was written by the agent editing its own Go source code and recompiling via `self_modify`. The OpenCode agent supervised the process. Three times SMAGo broke itself badly enough that OpenCode had to step in and restore the codebase.
 
-### Abort & tool-call traces (`76cb51d` — `b8d628c`)
+**What SMAGo built on its own:**
 
-- `/stop` and `/abort` commands for interrupting long tasks
-- Tool call traces combined into compact single-line format
-- Removed model name from step traces to reduce noise
+- **Git integration & self-upgrade** (`34ede0a`) — `git.go`: read git history, show diffs, use commit SHAs as version identifiers
+- **Abort & tool-call traces** (`76cb51d` — `b8d628c`) — `/stop` and `/abort` commands, compact single-line trace format
+- **Major refactor** (`83e9e0a`) — switch from sequential version numbers to **git commit SHAs**, tree-style tool trace with annotations, silent notifications, supervisor `/rebuild`
+- **Multi-session management** (`9d94ad8`) — multiple named sessions per chat, tool-call annotations, self-upgrade confirmation prompt
+- **DCP — Dynamic Context Pruning** (`3d081b5`) — the biggest feature: `/compress`, pruning strategies (dedup, error purge, system nudge), auto-calculated limits based on model context window, retry on HTTP 503/502/429/500 with exponential backoff
+- **Session management polish** (`b8bc85a` — `c6eff72`) — `/rename` with LLM auto-naming, `/sessions`, `/switch`, `/delete`, command whitelist during active tasks, rich `/help`
+- **Command registry** (`2dc9382`) — `/help` and bot menu auto-generated from command definitions
 
-### Major refactor — SHA versions & tree traces (`83e9e0a`)
+**What OpenCode fixed when SMAGo broke:**
 
-- Switched from sequential version numbers (v1, v2...) to **git commit SHAs**
-- Tree-style tool call formatting with annotations
-- Silent notifications (no chat flood during background tasks)
-- Supervisor `/rebuild` command
+- Supervised three recovery sessions where the agent's self-modifications caused build failures or runtime crashes, restoring the codebase each time
 
-### Multi-session & self-upgrade prompt (`9d94ad8`)
-
-- Multiple named sessions per chat
-- Tool-call annotations (LLM explains what it's about to do)
-- Self-upgrade confirmation prompt
-
-### DCP — Dynamic Context Pruning (`3d081b5`)
-
-The biggest feature: automatic context management to stay within model token limits.
-
-- `/compress` — manual context compression
-- Pruning strategies: dedup, error purge, system nudge
-- Auto-calculated limits based on model context window
-- Retry on HTTP 503/502/429/500 with exponential backoff
-- Integration with OpenCode Go models with known context windows
-
-### Session management polish (`b8bc85a` — `c6eff72`)
-
-- `/rename` — auto-generates session names via LLM
-- `/sessions`, `/switch`, `/delete` — full session lifecycle
-- `/dcp reset`, `/del`, `/sw` aliases
-- Command whitelist during active tasks
-- Rich `/help` with descriptions
-
-### Cleanup & documentation (`ebca1ae` — `0001437`)
+### Cleanup & documentation (`ebca1ae` — current)
 
 - Removed ~300 MB of binaries from git history (filter-repo)
-- Removed `opencode-ref` submodule (full OpenCode clone, no longer needed)
+- Removed `opencode-ref` submodule
 - Added `.gitignore` for build artifacts, logs, databases
 - Added `README.md` (EN) and `README.ru.md` (RU)
 - Removed Playwright browser, MCP client, and Node.js dependency
