@@ -8,8 +8,7 @@ SMAGo runs as a Windows system tray application with a supervisor that auto-rest
 
 - **Telegram bot** — long-polling, no webhooks needed
 - **Multi-provider LLM** — OpenCode, DeepSeek, llama.cpp, or any OpenAI-compatible API
-- **Tool calling** — terminal, read/write/edit files, web search, vision, Playwright browser
-- **MCP support** — connects to Model Context Protocol servers (Playwright)
+- **Tool calling** — terminal, read/write/edit files, web search, vision
 - **Self-modification** — upgrade, rollback, restart via `self_modify` tool or Telegram commands
 - **Supervisor** — system tray icon, auto-restart on crash, version swap with bad-version detection
 - **Markdown rendering** — headings as bold, tables with alignment, code blocks
@@ -27,7 +26,6 @@ SMAGo runs as a Windows system tray application with a supervisor that auto-rest
 - **Windows 10/11**
 - **Go 1.26+** ([download](https://go.dev/dl/))
 - **Git**
-- **Node.js + npm** (for Playwright MCP)
 - **Telegram bot token** — get one from [@BotFather](https://t.me/BotFather)
 
 ### 1. Clone the repository
@@ -71,7 +69,7 @@ Edit `config.json` and fill in:
 
 1. Start a chat with your bot in Telegram
 2. Send any message
-3. Open `data/smago.log` and look for the chat ID, or use a [@userinfobot](https://t.me/userinfobot)
+3. Open `data/smago.log` and look for the chat ID, or use [@userinfobot](https://t.me/userinfobot)
 
 #### Environment variables (optional, for secrets)
 
@@ -180,7 +178,6 @@ Send `/start` to your bot in Telegram. You should see a help message.
 | `vision` | Analyze images via multimodal model |
 | `compress` | Compress old conversation ranges with summaries |
 | `self_modify` | Restart, upgrade, rollback, or check version |
-| `playwright__*` | Playwright browser tools (29 tools via MCP) |
 
 ---
 
@@ -197,14 +194,12 @@ SMAGo/
 │   ├── agent.go                # Main loop: msg → LLM → tools → response
 │   ├── tools.go                # Tool registry
 │   ├── self_modify_tool.go     # Self-modification: upgrade, rollback, restart
-│   ├── mcp.go                  # Model Context Protocol client (stdio JSON-RPC)
 │   ├── markdown.go             # Markdown → Telegram HTML
 │   ├── dcp.go                  # Dynamic Context Pruning
 │   ├── dcp_compress.go         # Context compression logic
 │   ├── dcp_strategies.go       # Pruning strategies
 │   ├── vision.go               # Image analysis via multimodal model
 │   ├── web_search_tool.go      # DuckDuckGo HTML search
-│   ├── browser_tool.go         # Playwright browser integration
 │   ├── shell.go                # Shell command execution
 │   ├── http.go                 # HTTP client
 │   ├── inject.go               # Prompt injection helpers
@@ -234,7 +229,7 @@ data/
   next.json       → {"version": "addc8d7"} (pending swap)
 ```
 
-The supervisor watches for `next.json` and swaps binaries gracefully. If a version crashes within 20 seconds, it's marked as bad and won't be used again.
+The supervisor watches for `next.json` and swaps binaries gracefully. If a version crashes within 20 seconds, it is marked as bad and will not be used again.
 
 ---
 
