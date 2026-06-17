@@ -680,6 +680,8 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				if err := a.store.SwitchActive(chatID, name); err != nil {
 					a.send(chatID, "❌ "+err.Error())
 				} else {
+					a.dcpStates[chatID] = NewDCPState()
+					a.saveDCPState(chatID, a.dcpStates[chatID])
 					a.send(chatID, "✅ session → "+name)
 				}
 				_ = a.tg.AnswerCallback(cq.ID, "switched")
@@ -725,8 +727,8 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		// ── Welcome / help ────────────────────────────
 		case text == "/start":
 			a.send(chatID, "👋 I'm SMAGo.\n\n"+
-				"Sessions:\n/sessions /new /switch /rename /delete\n\n"+
-			"Conversation:\n/clear /stop /abort /compress\n\n"+
+				"Sessions:\n/sessions /new /switch /del /rename /delete\n\n"+
+			"Conversation:\n/stop /abort /compress\n\n"+
 				"Configuration:\n/models /model /provider /system /maxsteps /shell\n\n"+
 				"Context:\n/dcp\n\n"+
 				"Visibility:\n/tools /trace /verbose\n\n"+
@@ -749,20 +751,16 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		case strings.HasPrefix(text, "/new"):
 			a.handleNewSession(chatID, text)
 			continue
-		case strings.HasPrefix(text, "/switch"):
+		case strings.HasPrefix(text, "/switch"), strings.HasPrefix(text, "/sw"):
 			a.handleSwitchSession(chatID, text)
 			continue
 		case strings.HasPrefix(text, "/rename"):
 			a.handleRenameSession(chatID, text)
 			continue
-		case strings.HasPrefix(text, "/delete"):
+		case strings.HasPrefix(text, "/delete"), strings.HasPrefix(text, "/del"):
 			a.handleDeleteSession(chatID, text)
 			continue
-		case text == "/clear":
-			sess, _ := a.store.GetActive(chatID)
-			_ = sess.Truncate(0)
-			a.send(chatID, "🗑 session cleared")
-			continue
+
 
 		// ── Model / provider ──────────────────────────
 		case text == "/models":
@@ -1083,11 +1081,13 @@ func (a *Agent) handleNewSession(chatID int64, text string) {
 	}
 	_ = a.store.SwitchActive(chatID, name)
 	_ = sess
+	a.dcpStates[chatID] = NewDCPState()
+	a.saveDCPState(chatID, a.dcpStates[chatID])
 	a.send(chatID, fmt.Sprintf("🆕 new session: %s\n(active)", name))
 }
 
 func (a *Agent) handleSwitchSession(chatID int64, text string) {
-	name := strings.TrimSpace(strings.TrimPrefix(text, "/switch"))
+	name := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(text, "/sw"), "/switch"))
 	if name == "" {
 		a.showSessionList(chatID)
 		return
@@ -1096,6 +1096,8 @@ func (a *Agent) handleSwitchSession(chatID int64, text string) {
 		a.send(chatID, "❌ "+err.Error())
 		return
 	}
+	a.dcpStates[chatID] = NewDCPState()
+	a.saveDCPState(chatID, a.dcpStates[chatID])
 	sess, _ := a.store.GetActive(chatID)
 	a.send(chatID, fmt.Sprintf("✅ switched to: %s\n(%d messages)", name, sess.Len()))
 }
@@ -1151,15 +1153,22 @@ func (a *Agent) handleRenameSession(chatID int64, text string) {
 }
 
 func (a *Agent) handleDeleteSession(chatID int64, text string) {
-	name := strings.TrimSpace(strings.TrimPrefix(text, "/delete"))
+	// Strip both /delete and /del prefix
+	name := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(text, "/del"), "/delete"))
 	if name == "" {
-		a.send(chatID, "usage: /delete <name>")
-		return
+		sess, err := a.store.GetActive(chatID)
+		if err != nil {
+			a.send(chatID, "❌ no active session: "+err.Error())
+			return
+		}
+		name = sess.Name()
 	}
 	if err := a.store.DeleteSession(chatID, name); err != nil {
 		a.send(chatID, "❌ "+err.Error())
 		return
 	}
+	a.dcpStates[chatID] = NewDCPState()
+	a.saveDCPState(chatID, a.dcpStates[chatID])
 	a.send(chatID, fmt.Sprintf("🗑 deleted session: %s", name))
 }
 

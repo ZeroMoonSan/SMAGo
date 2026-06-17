@@ -24,10 +24,11 @@ var cmdRegistry = []CmdDef{
 	{"/new", "Create a new session", "Sessions", false},
 	{"/switch", "Switch to another session", "Sessions", false},
 	{"/rename", "Rename active session (or auto-name)", "Sessions", false},
-	{"/delete", "Delete a session", "Sessions", false},
+	{"/delete", "Delete session (active if no name given)", "Sessions", false},
+	{"/del", "Alias for /delete", "Sessions", false},
+	{"/sw", "Alias for /switch", "Sessions", false},
 
 	// Conversation
-	{"/clear", "Clear current session", "Conversation", false},
 	{"/compress", "Compress conversation context", "Conversation", true},
 
 	// Control
@@ -76,7 +77,15 @@ func init() {
 
 // isWhitelistedCommand returns true if the command can be used during a running task.
 func isWhitelistedCommand(text string) bool {
-	return cmdWhitelist[text]
+	if cmdWhitelist[text] {
+		return true
+	}
+	// Check prefix: e.g. "/sw something" should match "/sw"
+	space := strings.IndexByte(text, ' ')
+	if space > 0 {
+		return cmdWhitelist[text[:space]]
+	}
+	return false
 }
 
 // buildHelpText generates the /help message from the command registry.
