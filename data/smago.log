@@ -992,3 +992,50 @@
 2026/06/17 14:17:46 ready: long-polling for updates...
 2026/06/17 14:34:49 msg: chatID=1055198077 text="проверка"
 2026/06/17 14:34:50 err: chatID=1055198077 HTTP 401: {"type":"error","error":{"type":"AuthError","message":"Missing API key."}}
+2026/06/17 14:38:09 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 14:38:09 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 14:38:09 migrate: sessions.name (expected if already exists): SQL logic error: duplicate column name: name (1)
+2026/06/17 14:38:09 telegram: dialing api.telegram.org...
+2026/06/17 14:38:10 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 14:38:10 telegram: ✓ registered 30 bot commands
+2026/06/17 14:38:10 mcp: connecting to playwright ...
+2026/06/17 14:38:12 mcp playwright: connected (Playwright)
+2026/06/17 14:38:13 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 14:38:13 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 14:38:13 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 14:38:13 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 14:38:13 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 14:38:13 ready: long-polling for updates...
+2026/06/17 14:39:01 msg: chatID=1055198077 text="проверка"
+2026/06/17 14:39:05 reply: chatID=1055198077 "Привет! Я работаю нормально. Это проверка связи. Чем могу помочь?"
+2026/06/17 14:39:21 msg: chatID=1055198077 text="ознакомься с проектом"
+2026/06/17 14:39:57 reply: chatID=1055198077 "Отлично, вот что я нашёл. Проект **SMAGo** — это полноценный самомодифицирующийся AI-агент на Go с Telegram-интерфейсом.…"
+2026/06/17 14:58:26 msg: chatID=1055198077 text="/versions"
+2026/06/17 15:02:57 msg: chatID=1055198077 text="проверь ли раелизовано ли повторная попытка отправить запрос если 503"
+2026/06/17 15:03:29 reply: chatID=1055198077 "## ✅ Повторная попытка при 503 реализована\n\nВот полная картина:\n\n### Реализация в `agent.go` (строки 312–341)\n\n```go\nconst maxRetries…"
+2026/06/17 15:08:10 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 15:08:10 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 15:08:10 migrate: sessions.name (expected if already exists): SQL logic error: duplicate column name: name (1)
+2026/06/17 15:08:10 telegram: dialing api.telegram.org...
+2026/06/17 15:08:10 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 15:08:10 telegram: ✓ registered 30 bot commands
+2026/06/17 15:08:10 mcp: connecting to playwright ...
+2026/06/17 15:08:13 mcp playwright: connected (Playwright)
+2026/06/17 15:08:13 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 15:08:13 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 15:08:13 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 15:08:13 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 15:08:13 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 15:08:13 ready: long-polling for updates...
+2026/06/17 15:08:57 msg: chatID=1055198077 text="можешь сделать окно терминала скрытым для агента? Всё равно там логи исчезли"
+2026/06/17 15:09:12 msg: chatID=1055198077 text="/stop"
+2026/06/17 15:09:15 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 15:09:37 msg: chatID=1055198077 text="я если что запускаю тебя через supervisor-bg а не бат скрипты"
+2026/06/17 15:16:23 err: chatID=1055198077 Post "https://opencode.ai/zen/go/v1/chat/completions": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+2026/06/17 15:17:32 msg: chatID=1055198077 text="эм?"
+2026/06/17 15:17:55 msg: chatID=1055198077 text="/stop"
+2026/06/17 15:18:03 reply: chatID=1055198077 "⏹ stopped."
+2026/06/17 15:18:15 msg: chatID=1055198077 text="✗ LLM error: Post \"https://opencode.ai/zen/go/v1/chat/completions\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)\nнадо ещё на это повесить ретра…"
+2026/06/17 15:23:00 reply: chatID=1055198077 "Готово! Вот что сделано:\n\n### 1. Retry для `deadline exceeded` (`agent.go`)\n\nВ `isRetryableError` добавлены 3 новых паттерна:\n\n```go\n\"strings.Contains(msg,…"
+2026/06/17 15:28:06 msg: chatID=1055198077 text="/dcp"
+2026/06/17 15:28:29 msg: chatID=1055198077 text="ну теперь пора обновиться"
