@@ -255,7 +255,6 @@ func isRetryableError(err error) bool {
 		strings.Contains(msg, "i/o timeout") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "Connection prematurely closed") ||
-		strings.Contains(msg, "Connection prematurely closed") ||
 		strings.Contains(msg, "EOF")
 }
 
@@ -735,9 +734,10 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				"Meta:\n/chatid /health /help")
 			continue
 		case text == "/help":
+			a.send(chatID, buildHelpText())
 			continue
-		a.send(chatID, buildHelpText())
-		continue
+
+		// ── DCP ──────────────────────────────────────
 		case text == "/dcp" || strings.HasPrefix(text, "/dcp "):
 			a.handleDCPCommand(chatID, text)
 			continue
@@ -1101,13 +1101,46 @@ func (a *Agent) handleSwitchSession(chatID int64, text string) {
 }
 
 func (a *Agent) handleRenameSession(chatID int64, text string) {
-	args := strings.TrimSpace(strings.TrimPrefix(text, "/rename"))
-	parts := strings.Fields(args)
-	if len(parts) < 2 {
-		a.send(chatID, "usage: /rename <old> <new>")
+	newName := strings.TrimSpace(strings.TrimPrefix(text, "/rename"))
+	if newName == "" {
+		// Auto-generate name for the active session
+		sess, err := a.store.GetActive(chatID)
+		if err != nil {
+			a.send(chatID, "❌ no active session: "+err.Error())
+			return
+		}
+		sessions, _ := a.store.ListSessions(chatID)
+		n := len(sessions) + 1
+		for {
+			candidate := fmt.Sprintf("renamed-%d", n)
+			found := false
+			for _, s := range sessions {
+				if s.Name == candidate {
+					found = true
+					break
+				}
+			}
+			if !found {
+				newName = candidate
+				break
+			}
+			n++
+		}
+		oldName := sess.Name()
+		if err := a.store.RenameSession(chatID, oldName, newName); err != nil {
+			a.send(chatID, "❌ "+err.Error())
+			return
+		}
+		a.send(chatID, fmt.Sprintf("✅ renamed: %s → %s", oldName, newName))
 		return
 	}
-	oldName, newName := parts[0], parts[1]
+	// Rename active session to the given name
+	sess, err := a.store.GetActive(chatID)
+	if err != nil {
+		a.send(chatID, "❌ no active session: "+err.Error())
+		return
+	}
+	oldName := sess.Name()
 	if err := a.store.RenameSession(chatID, oldName, newName); err != nil {
 		a.send(chatID, "❌ "+err.Error())
 		return

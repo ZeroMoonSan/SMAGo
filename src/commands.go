@@ -23,7 +23,7 @@ var cmdRegistry = []CmdDef{
 	{"/sessions", "List all sessions", "Sessions", true},
 	{"/new", "Create a new session", "Sessions", false},
 	{"/switch", "Switch to another session", "Sessions", false},
-	{"/rename", "Rename a session", "Sessions", false},
+	{"/rename", "Rename active session (or auto-name)", "Sessions", false},
 	{"/delete", "Delete a session", "Sessions", false},
 
 	// Conversation
