@@ -244,5 +244,80 @@ The supervisor watches for `next.json` and swaps binaries gracefully. If a versi
 ---
 
 ## License
+## Changelog / History
+
+The project started on **June 16, 2026** and evolved rapidly over a few days.
+
+### MVP — Day 1 (`2850fcb`)
+
+The very first commit was a fully working prototype built in a single session:
+
+- **Telegram bot** via long-polling (stdlib `net/http`, zero external deps)
+- **LLM** — OpenAI-compatible chat completions (talked to local llama.cpp, self-hosted endpoints, OpenCode)
+- **4 tools** — `bash` (shell), `read_file`, `write_file`, `list_dir`
+- **Vision** — image analysis via multimodal model (mimo-v2.5)
+- **SQLite sessions** — per-chat conversation history (modernc.org/sqlite, no CGO)
+- **Markdown → HTML** — headings, bold, italic, code blocks for Telegram
+- **Self-modification** — agent could edit its own Go source, recompile, and swap the binary
+- **Supervisor** — system tray app with auto-restart on crash
+- **Single binary** — no Docker, no WSL, no external services
+
+Providers were migrated directly from the author's `opencode.json`: local llama.cpp, a home server, and a self-hosted DeepSeek proxy.
+
+### Git integration & self-upgrade (`34ede0a`)
+
+Added `git.go` — the agent could read git history, show diffs, and use commit SHAs as version identifiers.
+
+### Abort & tool-call traces (`76cb51d` — `b8d628c`)
+
+- `/stop` and `/abort` commands for interrupting long tasks
+- Tool call traces combined into compact single-line format
+- Removed model name from step traces to reduce noise
+
+### Major refactor — SHA versions & tree traces (`83e9e0a`)
+
+- Switched from sequential version numbers (v1, v2...) to **git commit SHAs**
+- Tree-style tool call formatting with annotations
+- Silent notifications (no chat flood during background tasks)
+- Supervisor `/rebuild` command
+
+### Multi-session & self-upgrade prompt (`9d94ad8`)
+
+- Multiple named sessions per chat
+- Tool-call annotations (LLM explains what it's about to do)
+- Self-upgrade confirmation prompt
+
+### DCP — Dynamic Context Pruning (`3d081b5`)
+
+The biggest feature: automatic context management to stay within model token limits.
+
+- `/compress` — manual context compression
+- Pruning strategies: dedup, error purge, system nudge
+- Auto-calculated limits based on model context window
+- Retry on HTTP 503/502/429/500 with exponential backoff
+- Integration with OpenCode Go models with known context windows
+
+### Session management polish (`b8bc85a` — `c6eff72`)
+
+- `/rename` — auto-generates session names via LLM
+- `/sessions`, `/switch`, `/delete` — full session lifecycle
+- `/dcp reset`, `/del`, `/sw` aliases
+- Command whitelist during active tasks
+- Rich `/help` with descriptions
+
+### Cleanup & documentation (`ebca1ae` — `535e0f0`)
+
+- Removed ~300 MB of binaries from git history (filter-repo)
+- Added `.gitignore` for build artifacts, logs, databases
+- Added `README.md` (EN) and `README.ru.md` (RU)
+- Removed Playwright browser, MCP client, and Node.js dependency
+- Final tool set: `terminal`, `read_file`, `write_file`, `edit_file`, `list_dir`, `web_search`, `vision`, `compress`, `self_modify`
+
+---
+
+## License
+
+Not yet specified. Contact the author for usage terms.
+
 
 Not yet specified. Contact the author for usage terms.
