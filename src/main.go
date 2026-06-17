@@ -119,43 +119,11 @@ func run() error {
 			me.Result.Username, me.Result.ID, me.Result.FirstName)
 	}
 
-	cmds := []BotCommand{
-		{Command: "start", Description: "Show welcome & help"},
-		{Command: "help", Description: "Show all commands"},
-		{Command: "sessions", Description: "List all sessions"},
-		{Command: "new", Description: "Create a new session"},
-		{Command: "switch", Description: "Switch to another session"},
-		{Command: "rename", Description: "Rename a session"},
-		{Command: "delete", Description: "Delete a session"},
-		{Command: "clear", Description: "Clear current session"},
-		{Command: "models", Description: "Pick a model (inline buttons)"},
-		{Command: "model", Description: "Show or set the current model"},
-		{Command: "provider", Description: "Show or set the current provider"},
-		{Command: "system", Description: "Show or set the system prompt"},
-		{Command: "maxsteps", Description: "Show or set the tool-call budget"},
-		{Command: "shell", Description: "Show or change the terminal shell"},
-		{Command: "tools", Description: "List available tools"},
-		{Command: "trace", Description: "Show the last agent actions"},
-		{Command: "verbose", Description: "Toggle inline traces + tool annotations"},
-		{Command: "stop", Description: "Stop the current task after this step"},
-		{Command: "abort", Description: "Force-stop the current task (kills tools)"},
-		{Command: "rollback", Description: "Roll back to a previous version"},
-		{Command: "versions", Description: "List all built versions"},
-		{Command: "upgrade", Description: "Build a new version and ask supervisor to swap"},
-		{Command: "restart", Description: "Restart the agent (supervisor respawns)"},
-		{Command: "version", Description: "Show build version"},
-		{Command: "gitlog", Description: "Show recent commits"},
-		{Command: "gitsha", Description: "Show the current commit"},
-		{Command: "gitdiff", Description: "Show working-tree diff"},
-		{Command: "health", Description: "Liveness check"},
-		{Command: "chatid", Description: "Show this chat's id"},
-		{Command: "compress", Description: "Compress conversation context"},
-		{Command: "dcp", Description: "Dynamic Context Pruning status/config"},
-	}
-	if err := tg.SetMyCommands(cmds); err != nil {
+	botCmds := buildBotCommands()
+	if err := tg.SetMyCommands(botCmds); err != nil {
 		log.Printf("warn: setMyCommands failed: %v", err)
 	} else {
-		log.Printf("telegram: ✓ registered %d bot commands", len(cmds))
+		log.Printf("telegram: ✓ registered %d bot commands", len(botCmds))
 	}
 
 	tools := NewToolRegistry(cfg)

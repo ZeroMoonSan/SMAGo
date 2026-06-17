@@ -254,6 +254,8 @@ func isRetryableError(err error) bool {
 		strings.Contains(msg, "Client.Timeout") ||
 		strings.Contains(msg, "i/o timeout") ||
 		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "Connection prematurely closed") ||
+		strings.Contains(msg, "Connection prematurely closed") ||
 		strings.Contains(msg, "EOF")
 }
 
@@ -715,21 +717,10 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			continue
 		}
 
-		if rs := a.getRun(chatID); rs != nil {
-			switch {
-			case text == "/help", text == "/health", text == "/chatid", text == "/version",
-				text == "/trace", text == "/debug", text == "/tools", text == "/verbose",
-				text == "/compress",
-				text == "/sessions",
-				text == "/dcp" || strings.HasPrefix(text, "/dcp "):
-				// whitelisted — fall through
-			default:
-				a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
-				continue
-			}
+		if rs := a.getRun(chatID); rs != nil && !isWhitelistedCommand(text) {
+			a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
+			continue
 		}
-
-
 		switch {
 
 		// ── Welcome / help ────────────────────────────
@@ -744,44 +735,9 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				"Meta:\n/chatid /health /help")
 			continue
 		case text == "/help":
-			a.send(chatID, "👋 *SMAGo Commands*\n\n"+
-				"*Sessions:*\n"+
-				"/sessions — list all sessions\n"+
-				"/new — create a new session\n"+
-				"/switch — switch to another session\n"+
-				"/rename — rename a session\n"+
-				"/delete — delete a session\n\n"+
-				"*Conversation:*\n"+
-				"/clear — clear current session\n"+
-				"/stop — stop the current task after this step\n"+
-				"/abort — force-stop the current task\n"+
-				"/compress — compress conversation context\n\n"+
-				"*Configuration:*\n"+
-				"/models — pick a model (inline buttons)\n"+
-				"/model — show or set the current model\n"+
-				"/provider — show or set the current provider\n"+
-				"/system — show or set the system prompt\n"+
-				"/maxsteps — show or set the tool-call budget\n"+
-				"/shell — show or change the terminal shell\n\n"+
-				"*Context:*\n"+
-				"/dcp — Dynamic Context Pruning status/config\n\n"+
-				"*Visibility:*\n"+
-				"/tools — list available tools\n"+
-				"/trace — show the last agent actions\n"+
-				"/verbose — toggle inline traces\n\n"+
-				"*Self-update:*\n"+
-				"/version — show build version\n"+
-				"/rollback — roll back to a previous version\n"+
-				"/gitsha — show the current commit\n"+
-				"/gitlog — show recent commits\n"+
-				"/gitdiff — show working-tree diff\n\n"+
-				"*Meta:*\n"+
-				"/chatid — show this chat's id\n"+
-				"/health — liveness check")
 			continue
-
-
-		// ── DCP ──────────────────────────────────────
+		a.send(chatID, buildHelpText())
+		continue
 		case text == "/dcp" || strings.HasPrefix(text, "/dcp "):
 			a.handleDCPCommand(chatID, text)
 			continue
