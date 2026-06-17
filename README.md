@@ -33,6 +33,16 @@ SMAGo runs as a Windows system tray application with a supervisor that auto-rest
 - **Git**
 - **Telegram bot token** — get one from [@BotFather](https://t.me/BotFather)
 
+### Quick install (winget)
+
+```cmd
+winget install --id GoLang.Go -e --source winget
+winget install --id Git.Git -e --source winget
+```
+
+Or download manually from [go.dev](https://go.dev/dl/) and [git-scm.com](https://git-scm.com/).
+
+
 ### 1. Clone the repository
 
 ```cmd
@@ -183,6 +193,64 @@ Send `/start` to your bot in Telegram. You should see a help message.
 | `vision` | Analyze images via multimodal model |
 | `compress` | Compress old conversation ranges with summaries |
 | `self_modify` | Restart, upgrade, rollback, or check version |
+
+| `self_modify` | Restart, upgrade, rollback, or check version |
+| `my-server__*` | Dynamic tools from MCP servers (see below) |
+
+---
+
+## MCP (Model Context Protocol)
+
+SMAGo supports external tool servers via [MCP](https://modelcontextprotocol.io/).
+Any stdio-based MCP server works — Node.js, Python, Go, Rust.
+
+### How it works
+
+1. You add an MCP server to `config.json`
+2. SMAGo spawns the server process on startup
+3. Tools from the server appear as `<server>__<tool>` (e.g. `fs__read_file`)
+4. The LLM can call them just like built-in tools
+
+### Setup
+
+1. Put your MCP server files in `mcps/` (gitignored):
+
+```cmd
+mkdir mcps\my-server
+```
+
+2. Add to `config.json`:
+
+```json
+{
+  "mcp": {
+    "fs": {
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "C:\\path\\to\\folder"],
+      "enabled": true
+    }
+  }
+}
+```
+
+3. Restart SMAGo. New tools appear in `/tools`.
+
+### Config fields
+
+| Field | Description |
+|-------|-------------|
+| `command` | Array: executable + args (spawned via stdio) |
+| `enabled` | `true` to connect, `false` to skip |
+| `env` | Optional env vars passed to the process |
+
+### Notes
+
+- Max 10 tools per server (most important ones, in declaration order)
+- Server logs go to `data/smago.log`
+- Disabled servers are skipped entirely
+- See `mcps/README.md` for more examples
+
+---
+
 
 ---
 

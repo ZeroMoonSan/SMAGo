@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,9 +12,10 @@ import (
 )
 
 type ToolRegistry struct {
-	cfg       *Config
-	tools     map[string]ToolDef
-	readFiles map[string]bool
+	cfg        *Config
+	tools      map[string]ToolDef
+	mcpClients []*MCPClient
+	readFiles  map[string]bool
 }
 
 type ToolDef struct {
@@ -128,9 +130,63 @@ func (r *ToolRegistry) registerDefaults() {
 		Parameters:  compressSchema,
 		Execute:     nil,
 	}
+
+	r.connectMCPServers()
 }
 
-func (r *ToolRegistry) Close() {}
+func (r *ToolRegistry) connectMCPServers() {
+	if len(r.cfg.MCP) == 0 {
+		return
+	}
+	for name, cfg := range r.cfg.MCP {
+		if !cfg.Enabled {
+			continue
+		}
+		log.Printf("mcp: connecting to %s ...", name)
+		client, err := NewMCPClient(name, cfg)
+		if err != nil {
+			log.Printf("mcp: ✗ %s failed: %v", name, err)
+			continue
+		}
+		r.mcpClients = append(r.mcpClients, client)
+
+		tools, err := client.ListTools()
+		if err != nil {
+			log.Printf("mcp: ✗ %s listTools: %v", name, err)
+			continue
+		}
+		log.Printf("mcp: ✓ %s — %d tool(s)", name, len(tools))
+
+		maxMcpTools := 10
+		if maxMcpTools > len(tools) {
+			maxMcpTools = len(tools)
+		}
+		for _, mt := range tools[:maxMcpTools] {
+			toolName := name + "__" + mt.Name
+			mtCopy := mt
+			clientCopy := client
+			desc := mtCopy.Description
+			if len(desc) > 150 {
+				desc = desc[:150] + "…"
+			}
+			r.tools[toolName] = ToolDef{
+				Name:        toolName,
+				Description: desc,
+				Parameters:  mtCopy.InputSchema,
+				Execute: func(ctx context.Context, args map[string]any) (string, error) {
+					return clientCopy.CallTool(ctx, mtCopy.Name, args)
+				},
+			}
+		}
+	}
+}
+
+func (r *ToolRegistry) Close() {
+	for _, c := range r.mcpClients {
+		_ = c.Close()
+	}
+	r.mcpClients = nil
+}
 
 func (r *ToolRegistry) All() []ToolDef {
 	out := make([]ToolDef, 0, len(r.tools))

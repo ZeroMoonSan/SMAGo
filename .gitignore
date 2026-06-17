@@ -29,11 +29,19 @@ opencode-ref/
 # Config with secrets
 config.json
 *.local.json
+# MCP servers (downloaded, not tracked)
+mcps/*
+!mcps/README.md
+!mcps/.gitkeep
 
-# Editor
-.vscode/
-.idea/
-Thumbs.db
+# Temp files
+_counttemp.go
+# Temp backups
+*.bak
+
+_gofiles.txt
+count_test.go
+
 .DS_Store
 
 # Temp files
