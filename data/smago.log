@@ -777,3 +777,145 @@
 2026/06/17 02:15:29 msg: chatID=1055198077 text="давай сперва сделаешь управление сессиями, чтобы можно было делать новые и переключаться между старыми. А ещ\xd1…"
 2026/06/17 02:23:26 reply: chatID=1055198077 "Всё собирается чисто. Вот итог:\n\n---\n\n## ✅ Реализовано\n\n### 1. Многопользовательские сессии (`session.go` — полностью пер…"
 2026/06/17 02:25:15 msg: chatID=1055198077 text="а обновиться самому? запиши это тоже в системный промпт."
+2026/06/17 02:27:37 upgrade: git HEAD = 32ba4d6
+2026/06/17 02:27:37 upgrade: building data\versions\c240a65\agent.exe from .
+2026/06/17 02:27:39 upgrade: smoke-testing new binary
+2026/06/17 02:27:43 upgrade: asking supervisor to swap to c240a65
+2026/06/17 02:27:43 upgrade: signal sent, supervisor will swap
+2026/06/17 02:27:50 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:27:50 telegram: dialing api.telegram.org...
+2026/06/17 02:27:50 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:27:50 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 02:27:50 mcp: connecting to playwright ...
+2026/06/17 02:27:53 mcp playwright: connected (Playwright)
+2026/06/17 02:27:53 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 02:27:53 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:27:53 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:27:53 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:27:53 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:27:53 ready: long-polling for updates...
+2026/06/17 02:28:02 msg: chatID=1055198077 text="/help"
+2026/06/17 02:28:02 err: chatID=1055198077 SQL logic error: no such column: name (1)
+2026/06/17 02:28:16 msg: chatID=1055198077 text="/switch"
+2026/06/17 02:28:19 msg: chatID=1055198077 text="❌ SQL logic error: no such column: name (1)"
+2026/06/17 02:28:19 err: chatID=1055198077 SQL logic error: no such column: name (1)
+2026/06/17 02:29:24 msg: chatID=1055198077 text="/help"
+2026/06/17 02:29:24 err: chatID=1055198077 SQL logic error: no such column: name (1)
+2026/06/17 02:29:26 msg: chatID=1055198077 text="/rollback"
+2026/06/17 02:29:54 msg: chatID=1055198077 text="/version"
+2026/06/17 02:30:04 msg: chatID=1055198077 text="/restart"
+2026/06/17 02:30:05 restart: clean exit requested by user
+2026/06/17 02:30:06 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:30:06 telegram: dialing api.telegram.org...
+2026/06/17 02:30:07 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:30:07 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 02:30:07 mcp: connecting to playwright ...
+2026/06/17 02:30:10 mcp playwright: connected (Playwright)
+2026/06/17 02:30:10 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 02:30:10 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:30:10 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:30:10 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:30:10 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:30:10 ready: long-polling for updates...
+2026/06/17 02:30:10 msg: chatID=1055198077 text="/version"
+2026/06/17 02:44:46 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:44:46 telegram: dialing api.telegram.org...
+2026/06/17 02:44:46 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:44:46 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 02:44:46 mcp: connecting to playwright ...
+2026/06/17 02:44:49 mcp playwright: connected (Playwright)
+2026/06/17 02:44:49 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 02:44:49 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:44:49 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:44:49 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:44:49 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:44:49 ready: long-polling for updates...
+2026/06/17 02:45:45 mcp[playwright] ^C
+2026/06/17 02:45:45 shutdown signal
+2026/06/17 02:50:54 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:50:54 telegram: dialing api.telegram.org...
+2026/06/17 02:50:54 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:50:54 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 02:50:54 mcp: connecting to playwright ...
+2026/06/17 02:50:57 mcp playwright: connected (Playwright)
+2026/06/17 02:50:57 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 02:50:57 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:50:57 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:50:57 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:50:57 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:50:57 ready: long-polling for updates...
+2026/06/17 02:51:52 msg: chatID=1055198077 text="/help"
+2026/06/17 02:51:52 err: chatID=1055198077 SQL logic error: no such column: name (1)
+2026/06/17 02:51:59 shutdown signal
+2026/06/17 02:51:59 mcp[playwright] ^C
+2026/06/17 02:52:01 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:52:01 telegram: dialing api.telegram.org...
+2026/06/17 02:52:01 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:52:01 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 02:52:01 mcp: connecting to playwright ...
+2026/06/17 02:52:04 mcp playwright: connected (Playwright)
+2026/06/17 02:52:04 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 02:52:04 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:52:04 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:52:04 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:52:04 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:52:04 ready: long-polling for updates...
+2026/06/17 02:52:10 shutdown signal
+2026/06/17 02:52:10 mcp[playwright] ^C
+2026/06/17 02:59:46 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 02:59:46 telegram: dialing api.telegram.org...
+2026/06/17 02:59:46 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 02:59:46 telegram: ✓ registered 22 bot commands
+2026/06/17 02:59:46 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 02:59:46 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 02:59:46 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 02:59:46 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 02:59:46 ready: long-polling for updates...
+2026/06/17 02:59:47 msg: chatID=1055198077 text="/switch"
+2026/06/17 03:00:09 msg: chatID=1055198077 text="/stop"
+2026/06/17 03:00:11 msg: chatID=1055198077 text="/exit"
+2026/06/17 03:00:44 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 03:00:44 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 03:00:44 telegram: dialing api.telegram.org...
+2026/06/17 03:00:45 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 03:00:45 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 03:00:45 mcp: connecting to playwright ...
+2026/06/17 03:00:48 mcp playwright: connected (Playwright)
+2026/06/17 03:00:48 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 03:00:48 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 03:00:48 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 03:00:48 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 03:00:48 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 03:00:48 ready: long-polling for updates...
+2026/06/17 03:00:50 msg: chatID=1055198077 text="/switch"
+2026/06/17 03:00:53 msg: chatID=1055198077 text="/new"
+2026/06/17 03:01:11 msg: chatID=1055198077 text="привет ознакомься с проектом"
+2026/06/17 03:02:09 reply: chatID=1055198077 "Привет! Я изучил проект **SMAGo**. Вот что нашёл:\n\n## 📋 Обзор проекта SMAGo\n\n**Тип:** Само-модифицирующийся AI-агент  \n**Язы…"
+2026/06/17 03:03:03 msg: chatID=1055198077 text="там есть MD файл по внедрению DCP. Приступай к внедрению."
+2026/06/17 03:04:15 shells: [powershell admin cmd wsl gitbash]
+2026/06/17 03:04:15 proxy: http://127.0.0.1:2080 (from system settings)
+2026/06/17 03:04:15 migrate: sessions.name (expected if already exists): SQL logic error: duplicate column name: name (1)
+2026/06/17 03:04:15 telegram: dialing api.telegram.org...
+2026/06/17 03:04:16 telegram: ✓ connected as @asmanovlev_bot (id=6627691089, name="@asmanovlev_bot")
+2026/06/17 03:04:16 warn: setMyCommands failed: setMyCommands HTTP 400
+2026/06/17 03:04:16 mcp: connecting to playwright ...
+2026/06/17 03:04:18 mcp playwright: connected (Playwright)
+2026/06/17 03:04:18 mcp: ✓ playwright — 29 tool(s)
+2026/06/17 03:04:18 inject: http://127.0.0.1:7777/inject (POST {chat_id,text})
+2026/06/17 03:04:18 mirror: http://127.0.0.1:7777/mirror (GET, polls outgoing messages)
+2026/06/17 03:04:18 llm: provider=opencode-go model=mimo-v2.5
+2026/06/17 03:04:18 chat:  target chatID=1055198077 (set via /chatid command or SMAGO_TELEGRAM_CHAT_ID)
+2026/06/17 03:04:18 ready: long-polling for updates...
+2026/06/17 03:05:33 msg: chatID=1055198077 text="чё уже внедрил шоле"
+2026/06/17 03:05:42 reply: chatID=1055198077 "Пока мало — пошёл было по плану, но осознал что писать файлы через PowerShell кусками неэффективно и неудобно. Вот …"
+2026/06/17 03:06:04 msg: chatID=1055198077 text="так у тебя же edit file есть"
+2026/06/17 03:06:12 reply: chatID=1055198077 "Ты прав. `write_file` требует `read_file` первым — для **новых** файлов это проблема, `read_file` на несуществующий файл падает …"
+2026/06/17 03:06:49 msg: chatID=1055198077 text="сделай просто тач нового файла а потом его редач"
+2026/06/17 03:13:16 reply: chatID=1055198077 "Готово! Вот что сделано:\n\n### ✅ Реализовано — все 12 модулей\n\n| # | Модуль | Файл | Статус |\n|---|---|---|---|\n| 1 | Типы данных |…"
+2026/06/17 12:12:53 msg: chatID=1055198077 text="/models"
+2026/06/17 12:14:15 msg: chatID=1055198077 text="почини список моделей /models чтобы были доступны те модели которые есть в подписке \"opencode go\" а также укажи лимиты …"
+2026/06/17 12:20:44 err: chatID=1055198077 HTTP 503: 
+2026/06/17 13:01:27 msg: chatID=1055198077 text="[12:20:46] @asmanovlev_bot: ✗ LLM error: HTTP 503:\n[12:20:46] @asmanovlev_bot: ❌ HTTP 503:\n\nнужно чтобы при таком событии была повторая поптыка обра…"
+2026/06/17 13:18:17 reply: chatID=1055198077 "Готово! Вот итог:\n\n### Что сделано\n\n**1. Retry при HTTP ошибках (503, 502, 429, 500, EOF)**\n- До 4 повторных попыток с интервалом 15 се\xd0…"
+2026/06/17 13:18:51 msg: chatID=1055198077 text="/upgrade"
+2026/06/17 13:19:00 msg: chatID=1055198077 text="сделай апгрейд"

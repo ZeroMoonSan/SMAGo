@@ -125,6 +125,15 @@ func (r *ToolRegistry) registerDefaults() {
 		Execute: r.listDir,
 	}
 
+	// DCP compress tool — actual execution intercepted in agent.go Handle().
+	r.tools["compress"] = ToolDef{
+		Name:        "compress",
+		Description: "Replace closed/old conversation ranges with detailed summaries to manage context length.",
+		Parameters:  compressSchema,
+		Execute:     nil,
+	}
+
+
 	r.connectMCPServers()
 }
 

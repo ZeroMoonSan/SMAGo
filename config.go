@@ -14,20 +14,34 @@ type Provider struct {
 }
 
 type Model struct {
-	Name string `json:"name"`
+	Name          string `json:"name"`
+	ContextWindow int    `json:"contextWindow,omitempty"`
+}
+
+type DCPConfig struct {
+	Enabled            bool `json:"dcpEnabled"`
+	MaxContextTokens   int  `json:"dcpMaxContextTokens"`
+	MinContextTokens   int  `json:"dcpMinContextTokens"`
+	NudgeFrequency     int  `json:"dcpNudgeFrequency"`
+	PurgeErrorsTurns   int  `json:"dcpPurgeErrorsTurns"`
+	ProtectRecentCount int  `json:"dcpProtectRecentCount"`
+	ShowNotifications  bool `json:"dcpShowNotifications"`
+	ManualMode         bool `json:"dcpManualMode"`
 }
 
 type Config struct {
-	TelegramToken  string                     `json:"telegramToken"`
-	TelegramChatID int64                      `json:"telegramChatID"`
-	DefaultModel   string                     `json:"defaultModel"`
-	Provider       string                     `json:"provider"`
-	Providers      map[string]Provider        `json:"providers"`
-	MCP            map[string]MCPServerConfig  `json:"mcp"`
-	SystemPrompt   string                     `json:"systemPrompt"`
-	DataDir        string                     `json:"dataDir"`
-	TrustedChatIDs []int64                    `json:"trustedChatIDs"`
-	MagickExe      string                     `json:"magickExe"`
+	TelegramToken  string                    `json:"telegramToken"`
+	TelegramChatID int64                     `json:"telegramChatID"`
+	DefaultModel   string                    `json:"defaultModel"`
+	Provider       string                    `json:"provider"`
+	Providers      map[string]Provider       `json:"providers"`
+	MCP            map[string]MCPServerConfig `json:"mcp"`
+	SystemPrompt   string                    `json:"systemPrompt"`
+	DataDir        string                    `json:"dataDir"`
+	TrustedChatIDs []int64                   `json:"trustedChatIDs"`
+	MagickExe      string                    `json:"magickExe"`
+	DefaultShell   string                    `json:"defaultShell"`
+	DCP            DCPConfig                 `json:"dcp"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -38,6 +52,14 @@ func LoadConfig(path string) (*Config, error) {
 	cfg := &Config{
 		DataDir:      "./data",
 		SystemPrompt: "You are a helpful AI assistant. Be concise. Use tools when helpful.",
+		DefaultShell: "powershell",
+		DCP: DCPConfig{
+			MaxContextTokens:   80000,
+			MinContextTokens:   40000,
+			NudgeFrequency:     5,
+			PurgeErrorsTurns:   4,
+			ProtectRecentCount: 4,
+		},
 	}
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err

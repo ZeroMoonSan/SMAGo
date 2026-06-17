@@ -42,6 +42,8 @@ type Agent struct {
 	runMu               sync.Mutex
 	runs                map[int64]*runState
 	pendingForceVersion string
+	shellOverride       map[int64]ShellType
+	dcpStates           map[int64]*DCPState
 }
 
 type injectedMsg struct {
@@ -55,6 +57,8 @@ func NewAgent(cfg *Config, llm *LLM, store *Store, tg *Telegram, tools *ToolRegi
 		cfg: cfg, llm: llm, store: store, tg: tg, tools: tools,
 		inject: make(chan injectedMsg, 16), maxSteps: make(map[int64]int),
 		traceBuf: make(map[int64][]string), runs: make(map[int64]*runState),
+		shellOverride: make(map[int64]ShellType),
+		dcpStates:     make(map[int64]*DCPState),
 		verbose: true,
 	}
 }
@@ -77,6 +81,52 @@ func (a *Agent) registerRun(chatID int64, rs *runState) func() {
 		a.runMu.Unlock()
 	}
 }
+
+// ── DCP state helpers ──────────────────────────────────
+
+func (a *Agent) getDCPState(chatID int64) *DCPState {
+	if dcp, ok := a.dcpStates[chatID]; ok {
+		return dcp
+	}
+	dcp, err := a.store.LoadDCPState(chatID)
+	if err != nil {
+		log.Printf("dcp: load state failed for %d: %v", chatID, err)
+		dcp = NewDCPState()
+	}
+	a.dcpStates[chatID] = dcp
+	return dcp
+}
+
+func (a *Agent) saveDCPState(chatID int64, dcp *DCPState) {
+	a.dcpStates[chatID] = dcp
+	if err := a.store.SaveDCPState(chatID, dcp); err != nil {
+		log.Printf("dcp: save state failed for %d: %v", chatID, err)
+	}
+}
+
+func (a *Agent) getModelContextWindow() int {
+	prov, ok := a.cfg.Providers[a.cfg.Provider]
+	if !ok {
+		return 0
+	}
+	m, ok := prov.Models[a.cfg.DefaultModel]
+	if !ok {
+		return 0
+	}
+	return m.ContextWindow
+}
+
+func (a *Agent) updateDCPLimitsFromModel(dcp *DCPState) {
+	cw := a.getModelContextWindow()
+	if cw <= 0 {
+		return
+	}
+	dcp.CurrentTokens = 0
+	a.cfg.DCP.MinContextTokens = cw * 20 / 100
+	a.cfg.DCP.MaxContextTokens = cw * 80 / 100
+}
+
+// ── Trace / send helpers ───────────────────────────────
 
 func (a *Agent) recordTrace(chatID int64, line string) string {
 	a.traceBuf[chatID] = append(a.traceBuf[chatID], line)
@@ -134,8 +184,6 @@ func truncateLog(s string, n int) string {
 }
 
 // formatToolCall renders a single tool call for verbose trace output.
-// annotation is the LLM's preceding text (Content) that explains why it
-// is making this call.
 func formatToolCall(name string, args map[string]any, annotation string, resultLen int, toolErr error) string {
 	var b strings.Builder
 	b.WriteString("**" + name + "**")
@@ -167,6 +215,18 @@ func formatToolCall(name string, args map[string]any, annotation string, resultL
 	return b.String()
 }
 
+func (a *Agent) getEffectiveShell(chatID int64) ShellType {
+	if s, ok := a.shellOverride[chatID]; ok {
+		return s
+	}
+	if a.cfg.DefaultShell != "" {
+		if s, ok := ParseShellType(a.cfg.DefaultShell); ok {
+			return s
+		}
+	}
+	return ShellPowerPowerShell
+}
+
 func sortedKeys(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -178,6 +238,20 @@ func sortedKeys(m map[string]any) []string {
 		}
 	}
 	return keys
+}
+
+// isRetryableError returns true for transient HTTP errors worth retrying.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "503") ||
+		strings.Contains(msg, "502") ||
+		strings.Contains(msg, "429") ||
+		strings.Contains(msg, "500") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "EOF")
 }
 
 // ──────────────────────────────────────────────────────
@@ -193,8 +267,18 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		return "", err
 	}
 
-	messages := []ChatMessage{{Role: "system", Content: a.cfg.SystemPrompt}}
-	messages = append(messages, sess.Messages()...)
+	dcp := a.getDCPState(chatID)
+	dcp.CurrentTurn++
+	a.updateDCPLimitsFromModel(dcp)
+
+	var messages []ChatMessage
+	if a.cfg.DCP.Enabled {
+		messages = a.buildDCPMessages(sess, dcp, 0)
+	} else {
+		messages = []ChatMessage{{Role: "system", Content: a.cfg.SystemPrompt}}
+		messages = append(messages, sess.Messages()...)
+	}
+
 	tools := a.tools.AsLLMTools()
 
 	maxSteps := defaultMaxSteps
@@ -202,7 +286,8 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		maxSteps = v
 	}
 
-	runCtx, runCancel := context.WithCancel(context.Background())
+	shell := a.getEffectiveShell(chatID)
+	runCtx, runCancel := context.WithCancel(WithShell(context.Background(), shell))
 	rs := &runState{ctx: runCtx, cancel: runCancel, stop: make(chan struct{})}
 	cleanup := a.registerRun(chatID, rs)
 	defer cleanup()
@@ -223,15 +308,46 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 
 		a.typing(chatID)
 		stepStart := time.Now()
-		resp, usage, err := a.llm.Chat(messages, tools)
-		stepDur := time.Since(stepStart)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
+
+		// LLM call with retry on transient errors (up to 4 retries, 15s intervals)
+		var resp *ChatMessage
+		var usage *Usage
+		var llmErr error
+		const maxRetries = 4
+		const retryDelay = 15 * time.Second
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			resp, usage, llmErr = a.llm.Chat(messages, tools)
+			if llmErr == nil {
+				break
+			}
+			if errors.Is(llmErr, context.Canceled) {
 				a.recordTrace(chatID, "🛑 aborted")
 				return "🛑 aborted.", nil
 			}
-			a.recordTrace(chatID, fmt.Sprintf("  ✗ LLM error: %v", err))
-			return "", err
+			if isRetryableError(llmErr) && attempt < maxRetries {
+				a.recordTrace(chatID, fmt.Sprintf("⚠ LLM error (attempt %d/%d): %v — retrying in %ds",
+					attempt+1, maxRetries+1, llmErr, int(retryDelay.Seconds())))
+				select {
+				case <-rs.stop:
+					a.recordTrace(chatID, "⏹ stopped by user")
+					return "⏹ stopped.", nil
+				case <-runCtx.Done():
+					a.recordTrace(chatID, "🛑 aborted")
+					return "🛑 aborted.", nil
+				case <-time.After(retryDelay):
+				}
+				continue
+			}
+			break
+		}
+		stepDur := time.Since(stepStart)
+		if llmErr != nil {
+			a.recordTrace(chatID, fmt.Sprintf("  ✗ LLM error: %v", llmErr))
+			return "", llmErr
+		}
+
+		if usage != nil && usage.PromptTokens > 0 {
+			dcp.CurrentTokens = usage.PromptTokens
 		}
 
 		var toolLines []string
@@ -239,6 +355,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		if len(resp.ToolCalls) == 0 {
 			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content))
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
+			a.saveDCPState(chatID, dcp)
 			return resp.Content, nil
 		}
 
@@ -246,6 +363,28 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 
 		for _, tc := range resp.ToolCalls {
 			a.typing(chatID)
+
+			// Intercept compress tool
+			if tc.Function.Name == "compress" && a.cfg.DCP.Enabled {
+				var args map[string]any
+				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+					toolLines = append(toolLines, fmt.Sprintf("  ✗ compress: bad args: %v", err))
+					_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: "compress", Content: "error: bad arguments: " + err.Error()})
+					continue
+				}
+				result, execErr := execCompress(runCtx, args, dcp, sess.Len())
+				if execErr != nil {
+					_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: "compress", Content: "error: " + execErr.Error()})
+					toolLines = append(toolLines, formatToolCall("compress", args, resp.Content, 0, execErr))
+					continue
+				}
+				dcp.LastCompressStep = i + 1
+				_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: "compress", Content: result})
+				toolLines = append(toolLines, formatToolCall("compress", args, resp.Content, len(result), nil))
+				a.recordTrace(chatID, "📦 DCP: "+result)
+				continue
+			}
+
 			tdef, ok := a.tools.Get(tc.Function.Name)
 			if !ok {
 				toolLines = append(toolLines, fmt.Sprintf("  ✗ %s: unknown tool", tc.Function.Name))
@@ -259,23 +398,36 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				continue
 			}
 
+			if a.cfg.DCP.Enabled {
+				dcp.RecordToolCall(tc.Function.Name, args, sess.Len()-1)
+			}
+
 			var toolErr error
 			out, err := tdef.Execute(runCtx, args)
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					toolLines = append(toolLines, fmt.Sprintf("  🛑 %s cancelled", tc.Function.Name))
 					a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1)
+					a.saveDCPState(chatID, dcp)
 					return "🛑 aborted.", nil
 				}
 				toolErr = err
 				out = "error: " + err.Error()
+				if a.cfg.DCP.Enabled {
+					dcp.RecordErrorToolCall(tc.ID, tc.Function.Name, tc.Function.Arguments, sess.Len()-1)
+				}
 			}
 			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, resp.Content, len(out), toolErr))
 			_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
-			messages = append(messages,
-				ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
-				ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out},
-			)
+
+			if a.cfg.DCP.Enabled {
+				messages = a.buildDCPMessages(sess, dcp, i+1)
+			} else {
+				messages = append(messages,
+					ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
+					ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out},
+				)
+			}
 		}
 		a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1)
 	}
@@ -287,6 +439,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		return "", fmt.Errorf("summarise failed: %w", err)
 	}
 	_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
+	a.saveDCPState(chatID, dcp)
 	return resp.Content, nil
 }
 
@@ -328,15 +481,67 @@ func (a *Agent) sendModelGrid(chatID int64) {
 		if name == a.cfg.DefaultModel {
 			label += " ✅"
 		}
-		if m.Name != "" {
-			label += "  " + m.Name
+		if m.ContextWindow > 0 {
+			label += fmt.Sprintf("  (%dk ctx)", m.ContextWindow/1000)
 		}
 		if len(label) > 60 {
 			label = label[:60] + "…"
 		}
 		rows = append(rows, []InlineButton{{Text: label, CallbackData: "model:" + name}})
 	}
-	a.sendButtons(chatID, fmt.Sprintf("🤖 provider: %s\npick a model:", a.cfg.Provider), rows)
+	cw := a.getModelContextWindow()
+	dcpStatus := "OFF"
+	if a.cfg.DCP.Enabled {
+		dcpStatus = "ON"
+	}
+	info := fmt.Sprintf("🤖 provider: %s\npick a model:\n\n📦 DCP: %s", a.cfg.Provider, dcpStatus)
+	if cw > 0 {
+		info += fmt.Sprintf("\ncontext: %dk | min 20%%: %dk | max 80%%: %dk", cw/1000, a.cfg.DCP.MinContextTokens/1000, a.cfg.DCP.MaxContextTokens/1000)
+	}
+	a.sendButtons(chatID, info, rows)
+}
+
+// ──────────────────────────────────────────────────────
+// DCP commands
+// ──────────────────────────────────────────────────────
+
+func (a *Agent) handleDCPCommand(chatID int64, text string) {
+	args := strings.TrimSpace(strings.TrimPrefix(text, "/dcp"))
+	switch args {
+	case "", "status":
+		dcp := a.getDCPState(chatID)
+		status := "OFF"
+		if a.cfg.DCP.Enabled {
+			status = "ON"
+		}
+		cw := a.getModelContextWindow()
+		var b strings.Builder
+		fmt.Fprintf(&b, "📦 DCP: %s\n\n", status)
+		b.WriteString(dcp.Summary())
+		b.WriteString(fmt.Sprintf("\ntokens now: ~%d", dcp.CurrentTokens))
+		if cw > 0 {
+			b.WriteString(fmt.Sprintf("\nmodel context: %dk", cw/1000))
+			b.WriteString(fmt.Sprintf("\nmin (20%%): %dk", a.cfg.DCP.MinContextTokens/1000))
+			b.WriteString(fmt.Sprintf("\nmax (80%%): %dk", a.cfg.DCP.MaxContextTokens/1000))
+		} else {
+			b.WriteString(fmt.Sprintf("\nmin: %d", a.cfg.DCP.MinContextTokens))
+			b.WriteString(fmt.Sprintf("\nmax: %d", a.cfg.DCP.MaxContextTokens))
+		}
+		b.WriteString(fmt.Sprintf("\nturn: %d", dcp.CurrentTurn))
+		if dcp.LastCompressStep > 0 {
+			b.WriteString(fmt.Sprintf("\nlast compress: step %d", dcp.LastCompressStep))
+		}
+		a.send(chatID, b.String())
+	case "on":
+		a.cfg.DCP.Enabled = true
+		a.updateDCPLimitsFromModel(a.getDCPState(chatID))
+		a.send(chatID, "✅ DCP enabled")
+	case "off":
+		a.cfg.DCP.Enabled = false
+		a.send(chatID, "✅ DCP disabled")
+	default:
+		a.send(chatID, "usage:\n/dcp — status\n/dcp on — enable\n/dcp off — disable")
+	}
 }
 
 // ──────────────────────────────────────────────────────
@@ -500,13 +705,19 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			a.send(chatID, "👋 I'm SMAGo.\n\n"+
 				"Sessions:\n/sessions /new /switch /rename /delete\n\n"+
 				"Conversation:\n/clear /stop /abort\n\n"+
-				"Configuration:\n/models /model /provider /system /maxsteps\n\n"+
+				"Configuration:\n/models /model /provider /system /maxsteps /shell\n\n"+
+				"Context:\n/dcp\n\n"+
 				"Visibility:\n/tools /trace /verbose\n\n"+
 				"Self-update:\n/version /rollback /gitsha /gitlog /gitdiff\n\n"+
 				"Meta:\n/chatid /health /help")
 			continue
 		case text == "/help":
-			a.send(chatID, "/sessions /new /switch /rename /delete\n/clear /stop /abort\n/models /model /provider /system /maxsteps\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+			a.send(chatID, "/sessions /new /switch /rename /delete\n/clear /stop /abort\n/models /model /provider /system /maxsteps /shell\n/dcp\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+
+		// ── DCP ──────────────────────────────────────
+		case text == "/dcp" || strings.HasPrefix(text, "/dcp "):
+			a.handleDCPCommand(chatID, text)
+			continue
 
 		// ── Session management ────────────────────────
 		case text == "/sessions":
@@ -589,6 +800,43 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			}
 			a.maxSteps[chatID] = n
 			a.send(chatID, fmt.Sprintf("✅ max steps → %d", n))
+			continue
+
+		// ── Shell ──────────────────────────────────────
+		case text == "/shell" || strings.HasPrefix(text, "/shell "):
+			args := strings.TrimSpace(strings.TrimPrefix(text, "/shell"))
+			switch {
+			case args == "" || args == "current":
+				cur := a.getEffectiveShell(chatID)
+				a.send(chatID, fmt.Sprintf("🖥 shell: %s\n\navailable:\n%s", cur, FormatShellList(ProbedShells, cur)))
+			case args == "list":
+				a.send(chatID, "available shells:\n"+FormatShellList(ProbedShells, -1))
+			case strings.HasPrefix(args, "set "):
+				name := strings.TrimSpace(strings.TrimPrefix(args, "set "))
+				s, ok := ParseShellType(name)
+				if !ok {
+					a.send(chatID, "❌ unknown shell: "+name+"\navailable: "+strings.Join(ShellNames(ProbedShells), ", "))
+					continue
+				}
+				found := false
+				for _, ps := range ProbedShells {
+					if ps == s {
+						found = true
+						break
+					}
+				}
+				if !found {
+					a.send(chatID, "❌ shell not detected on this system: "+name)
+					continue
+				}
+				a.shellOverride[chatID] = s
+				a.send(chatID, "✅ shell → "+name)
+			case args == "reset":
+				delete(a.shellOverride, chatID)
+				a.send(chatID, "✅ shell reset to default ("+a.cfg.DefaultShell+")")
+			default:
+				a.send(chatID, "usage: /shell [current|list|set <name>|reset]")
+			}
 			continue
 
 		// ── Visibility ────────────────────────────────
@@ -786,7 +1034,6 @@ func (a *Agent) showSessionList(chatID int64) {
 func (a *Agent) handleNewSession(chatID int64, text string) {
 	name := strings.TrimSpace(strings.TrimPrefix(text, "/new"))
 	if name == "" {
-		// Generate a name: "new-1", "new-2", etc.
 		sessions, _ := a.store.ListSessions(chatID)
 		n := len(sessions) + 1
 		for {

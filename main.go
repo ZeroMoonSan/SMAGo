@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const version = "0.1.0-mvp"
+var version = "dev"
 
 func main() {
 	if len(os.Args) >= 2 {
@@ -75,6 +75,9 @@ func run() error {
 	}
 	defer writePID(cfg.DataDir, 0)()
 
+	ProbedShells = ProbeShells()
+	log.Printf("shells: %v", ShellNames(ProbedShells))
+
 	proxyURL := detectAndApplyProxy()
 	if proxyURL != "" {
 		log.Printf("proxy: %s (from system settings)", proxyURL)
@@ -132,6 +135,7 @@ func run() error {
 		{Command: "provider", Description: "Show or set the current provider"},
 		{Command: "system", Description: "Show or set the system prompt"},
 		{Command: "maxsteps", Description: "Show or set the tool-call budget"},
+		{Command: "shell", Description: "Show or change the terminal shell"},
 		{Command: "tools", Description: "List available tools"},
 		{Command: "trace", Description: "Show the last agent actions"},
 		{Command: "verbose", Description: "Toggle inline traces + tool annotations"},
@@ -147,6 +151,7 @@ func run() error {
 		{Command: "gitdiff", Description: "Show working-tree diff"},
 		{Command: "health", Description: "Liveness check"},
 		{Command: "chatid", Description: "Show this chat's id"},
+		{Command: "dcp", Description: "Dynamic Context Pruning status/config"},
 	}
 	if err := tg.SetMyCommands(cmds); err != nil {
 		log.Printf("warn: setMyCommands failed: %v", err)
@@ -190,6 +195,13 @@ func run() error {
 		return fmt.Errorf("agent: %w", err)
 	}
 	return nil
+}
+
+func shaFromGit() string {
+	if sha, err := gitHead(); err == nil && len(sha) >= 7 {
+		return sha[:7]
+	}
+	return "unknown"
 }
 
 func detectAndApplyProxy() string {
@@ -242,7 +254,7 @@ func findConfig() (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("no config found (tried ./config.json, ./smago.json, $SMAGO_CONFIG, ~/.config/smago/config.json)")
+	return "", fmt.Errorf("no config found")
 }
 
 func setupLogging(dataDir string) error {
