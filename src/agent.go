@@ -745,7 +745,9 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			continue
 		case text == "/help":
 			a.send(chatID, "/sessions /new /switch /rename /delete\n/clear /stop /abort\n/models /model /provider /system /maxsteps /shell\n/dcp\n/tools /trace /verbose\n/version /rollback /gitsha /gitlog /gitdiff\n/chatid /health")
+			continue
 
+		// ── DCP ──────────────────────────────────────
 		// ── DCP ──────────────────────────────────────
 		case text == "/dcp" || strings.HasPrefix(text, "/dcp "):
 			a.handleDCPCommand(chatID, text)
