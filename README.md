@@ -4,7 +4,10 @@ A lightweight Go agent that communicates via Telegram, calls any OpenAI-compatib
 
 SMAGo runs as a Windows system tray application with a supervisor that auto-restarts on crash and manages hot-swap upgrades.
 
-> **Built entirely by AI.** Minimax M3 and DeepSeek wrote the codebase. MiMo V2.5 (vision) and the OpenCode agent iterated on it, tested features, and refined the architecture. Human role: idea, direction, code review.
+> **Written entirely by AI.** Minimax M3 and DeepSeek via OpenCode created the architecture and initial boilerplate. Then SMAGo via MiMo V2.5 (vision) developed itself. Human role: idea, direction, code review.
+
+> 🇷🇺 *Читать на русском: [README.ru.md](README.ru.md)*
+
 
 ## Features
 
@@ -247,7 +250,8 @@ The supervisor watches for `next.json` and swaps binaries gracefully. If a versi
 
 ## Changelog / History
 
-This project was **coded entirely by AI** — Minimax M3 and DeepSeek wrote the codebase, MiMo V2.5 (vision) and the OpenCode agent iterated on it. Started on **June 16, 2026** and evolved rapidly over a few days.
+This project was **coded entirely by AI** — Minimax M3 and DeepSeek via OpenCode created the architecture and initial boilerplate. Then SMAGo via MiMo V2.5 (vision) developed itself — editing its own Go source and recompiling. The OpenCode agent supervised the process. Three times SMAGo broke itself badly enough that OpenCode had to step in and restore the codebase.
+
 
 ### Boilerplate (`2850fcb`)
 
@@ -277,9 +281,10 @@ From this point on, **SMAGo developed itself**. Each feature, fix, and refactor 
 - **Multi-session management** (`9d94ad8`) — multiple named sessions per chat, tool-call annotations, self-upgrade confirmation prompt
 - **DCP — Dynamic Context Pruning** (`3d081b5`) — the biggest feature: `/compress`, pruning strategies (dedup, error purge, system nudge), auto-calculated limits based on model context window, retry on HTTP 503/502/429/500 with exponential backoff
 - **Session management polish** (`b8bc85a` — `c6eff72`) — `/rename` with LLM auto-naming, `/sessions`, `/switch`, `/delete`, command whitelist during active tasks, rich `/help`
-- **Command registry** (`2dc9382`) — `/help` and bot menu auto-generated from command definitions
+### Self-driven development (`34ede0a` — `0001437`)
 
-**What OpenCode fixed when SMAGo broke:**
+**What SMAGo built on its own:**
+
 
 - Supervised three recovery sessions where the agent's self-modifications caused build failures or runtime crashes, restoring the codebase each time
 
@@ -296,4 +301,4 @@ From this point on, **SMAGo developed itself**. Each feature, fix, and refactor 
 
 ## License
 
-Not yet specified. Contact the author for usage terms.
+[MIT](LICENSE)
