@@ -1,0 +1,32 @@
+﻿# Binaries
+*.exe
+*.dll
+*.pdb
+
+# Data files
+*.db
+*.db.bak
+*.sqlite
+*.log
+*.pid
+
+# Versions directory (local build artifacts)
+versions/
+
+# Current version tracking
+current.json
+
+# Python patch/fix scripts (one-off)
+fix*.py
+patch*.py
+swap.py
+
+# Test binaries
+smago_test.exe
+test_*.exe
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

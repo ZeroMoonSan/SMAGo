@@ -1,16 +1,27 @@
-# Build artefacts (in bin/)
-bin/*.exe
-bin/*.exe~
+# Build artefacts
+*.exe
+*.exe~
+*.dll
+*.pdb
+*.syso
 
 # Runtime data
 data/sessions.db
+data/sessions.db.bak
 data/*.pid
 data/current.json
 data/next.json
 data/bad.json
-data/supervisor.pid
 data/smago.log
-data/sessions.db.bak
+
+# Versions directory (local build artifacts)
+data/versions/
+src/data/versions/
+
+# Python patch/fix scripts (one-off, don't belong in repo)
+data/fix*.py
+data/patch*.py
+data/swap.py
 
 # Config with secrets
 config.json
@@ -19,6 +30,8 @@ config.json
 # Editor
 .vscode/
 .idea/
+Thumbs.db
+.DS_Store
 
 # Playwright MCP snapshots
 .playwright-mcp/
@@ -26,4 +39,6 @@ config.json
 # Temp files
 _counttemp.go
 _gofiles.txt
+count_test.go
+
 count_test.go
