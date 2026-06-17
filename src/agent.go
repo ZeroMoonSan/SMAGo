@@ -389,15 +389,15 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				result, execErr := execCompress(runCtx, args, dcp, sess.Len())
 				if execErr != nil {
 					_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: "compress", Content: "error: " + execErr.Error()})
-					toolLines = append(toolLines, formatToolCall("compress", args, resp.Content, 0, execErr))
+					toolLines = append(toolLines, "  ✗ compress: "+execErr.Error())
 					continue
 				}
 				dcp.LastCompressStep = i + 1
 				compressedThisStep = true
 				compressCount++
 				_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: "compress", Content: result})
-				toolLines = append(toolLines, formatToolCall("compress", args, resp.Content, len(result), nil))
-				a.recordTrace(chatID, "📦 DCP: "+result)
+				toolLines = append(toolLines, result)
+
 				// Rebuild messages so LLM sees compressed context and stops compressing
 				messages = a.buildDCPMessages(sess, dcp, i+1)
 				continue
@@ -986,7 +986,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 			continue
 
 		// ── Fallback ──────────────────────────────────
-		case strings.HasPrefix(text, "/"):
+		case strings.HasPrefix(text, "/") && text != "/compress":
 			a.send(chatID, "unknown command: "+text+"\ntype /help")
 			continue
 		}
