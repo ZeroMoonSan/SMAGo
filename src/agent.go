@@ -284,7 +284,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	}
 
 	shell := a.getEffectiveShell(chatID)
-	runCtx, runCancel := context.WithCancel(WithShell(context.Background(), shell))
+	runCtx, runCancel := context.WithCancel(WithChatID(WithShell(context.Background(), shell), chatID))
 	rs := &runState{ctx: runCtx, cancel: runCancel, stop: make(chan struct{})}
 	cleanup := a.registerRun(chatID, rs)
 	defer cleanup()
