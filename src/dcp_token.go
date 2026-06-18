@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import "encoding/json"
 
@@ -47,13 +47,14 @@ func EstimateTokensFromUsage(msgs []ChatMessage, usage *Usage) int {
 
 // ToolCallSignature creates a dedup signature for a tool call.
 func ToolCallSignature(name string, args map[string]any) string {
-	// Sort keys for deterministic signature
 	sorted := sortedKeys(args)
+	sortedArgs := make(map[string]any, len(args))
+	for _, k := range sorted {
+		sortedArgs[k] = args[k]
+	}
 	argBytes, _ := json.Marshal(struct {
 		Name string         `json:"n"`
 		Args map[string]any `json:"a"`
-	}{Name: name, Args: args})
-	// Use the raw bytes — already deterministic enough from sorted keys
-	_ = sorted
+	}{Name: name, Args: sortedArgs})
 	return string(argBytes)
 }
