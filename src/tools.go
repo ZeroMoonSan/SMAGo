@@ -308,6 +308,10 @@ func (r *ToolRegistry) editFile(ctx context.Context, args map[string]any) (strin
 	nLines := len(lines)
 	start := toInt(args["start"])
 
+	// Snapshot old lines for diff output
+	oldLines := make([]string, len(lines))
+	copy(oldLines, lines)
+
 	switch action {
 	case "replace":
 		if start < 1 {
@@ -377,8 +381,100 @@ func (r *ToolRegistry) editFile(ctx context.Context, args map[string]any) (strin
 	if err := os.WriteFile(full, []byte(newContent), 0644); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("ok: %s on %s (%d lines)", action, p, len(lines)), nil
+
+	// Build diff-like output so the caller immediately sees what changed
+	return editDiffSummary(p, action, start, oldLines, lines), nil
 }
+// editDiffSummary produces a git-diff-like view of what changed with ±5 line context.
+func editDiffSummary(path, action string, startLine int, oldLines, newLines []string) string {
+	nOld := len(oldLines)
+	nNew := len(newLines)
+
+	// Find first and last differing lines
+	firstDiff, lastDiff := -1, -1
+	maxLen := nOld
+	if nNew > maxLen {
+		maxLen = nNew
+	}
+	for i := 0; i < maxLen; i++ {
+		var o, n string
+		if i < nOld {
+			o = oldLines[i]
+		}
+		if i < nNew {
+			n = newLines[i]
+		}
+		if o != n {
+			if firstDiff < 0 {
+				firstDiff = i
+			}
+			lastDiff = i
+		}
+	}
+	if nNew < nOld && lastDiff < nNew {
+		lastDiff = nNew
+	}
+	if firstDiff < 0 {
+		firstDiff = 0
+	}
+
+	// Context window
+	ctxStart := firstDiff - 5
+	if ctxStart < 0 {
+		ctxStart = 0
+	}
+	ctxEnd := lastDiff + 6
+	if ctxEnd > maxLen {
+		ctxEnd = maxLen
+	}
+
+	var b strings.Builder
+	delCount := nOld - nNew
+	switch {
+	case delCount > 0:
+		fmt.Fprintf(&b, "ok: %s on %s lines %d-%d (%d→%d lines, -%d)\n\n", action, path, startLine, startLine+delCount, nOld, nNew, delCount)
+	case nNew > nOld:
+		fmt.Fprintf(&b, "ok: %s on %s lines %d-%d (%d→%d lines, +%d)\n\n", action, path, startLine, startLine+(nNew-nOld), nOld, nNew, nNew-nOld)
+	default:
+		fmt.Fprintf(&b, "ok: %s on %s line %d (%d lines)\n\n", action, path, startLine, nNew)
+	}
+
+	for i := ctxStart; i < ctxEnd; i++ {
+		ln := i + 1
+		var o, n string
+		if i < nOld {
+			o = oldLines[i]
+		}
+		if i < nNew {
+			n = newLines[i]
+		}
+		if o == n {
+			s := o
+			if len(s) > 120 {
+				s = s[:120] + "…"
+			}
+			fmt.Fprintf(&b, " %4d │ %s\n", ln, s)
+		} else {
+			if o != "" {
+				s := o
+				if len(s) > 120 {
+					s = s[:120] + "…"
+				}
+				fmt.Fprintf(&b, "-%4d │ %s\n", ln, s)
+			}
+			if n != "" {
+				s := n
+				if len(s) > 120 {
+					s = s[:120] + "…"
+				}
+				fmt.Fprintf(&b, "+%4d │ %s\n", ln, s)
+			}
+		}
+	}
+
+	return b.String()
+}
+
 
 func (r *ToolRegistry) listDir(ctx context.Context, args map[string]any) (string, error) {
 	p, _ := args["path"].(string)
