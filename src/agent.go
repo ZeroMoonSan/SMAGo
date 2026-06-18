@@ -350,7 +350,13 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		var toolLines []string
 
 		if len(resp.ToolCalls) == 0 {
-			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content), "")
+			if resp.Content == "" {
+				a.recordTrace(chatID, "empty response from LLM, retrying...")
+				_ = sess.Append(ChatMessage{Role: "assistant", Content: ""})
+				_ = sess.Append(ChatMessage{Role: "system", Content: "Your previous response was empty. You must respond with text or tool calls."})
+				continue
+			}
+			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content), resp.Content)
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
 			a.saveDCPState(chatID, dcp)
 			return resp.Content, nil
