@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 )
 
 // checkResumeMarker looks for a resume.json left by upgrade-resume.
@@ -15,8 +16,11 @@ func checkResumeMarker(agent *Agent) {
 	}
 	clearResumeMarker()
 
-	// Restore session context
-	sess, err := agent.store.LoadOrCreate(m.ChatID, "default")
+	// Append to the ACTIVE session, not a hardcoded "default"
+	sess, err := agent.store.GetActive(m.ChatID)
+	if err != nil {
+		sess, err = agent.store.LoadOrCreate(m.ChatID, "new-resume")
+	}
 	if err == nil {
 		_ = sess.Append(ChatMessage{Role: "system",
 			Content: fmt.Sprintf("Upgrade to %s successful. Continue your previous task.", m.Version)})
@@ -26,6 +30,11 @@ func checkResumeMarker(agent *Agent) {
 	agent.send(m.ChatID, msg)
 	log.Printf("resume: sent resume message to chat %d for version %s", m.ChatID, m.Version)
 
-	// Push a continuation prompt so the LLM picks up where it left off
-	_ = agent.Push(m.ChatID, "[system] Upgrade completed. Resume your previous task.")
+	// Delay the push so RunLoop has time to start reading from inject channel
+	go func() {
+		time.Sleep(2 * time.Second)
+		if err := agent.Push(m.ChatID, "Upgrade completed successfully. Continue your previous task."); err != nil {
+			log.Printf("resume: push failed: %v", err)
+		}
+	}()
 }
