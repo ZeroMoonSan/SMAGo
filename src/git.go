@@ -12,7 +12,7 @@ import (
 
 func gitCmd(args ...string) (string, error) {
 	cmd := hiddenCmd("git", args...)
-	cmd.Dir = "."
+	cmd.Dir = projectRoot()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -113,7 +113,7 @@ type VersionInfo struct {
 }
 
 func listVersions() ([]VersionInfo, error) {
-	root := filepath.Join("data", "versions")
+	root := filepath.Join(projectRoot(), "data", "versions")
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -161,7 +161,7 @@ func listVersions() ([]VersionInfo, error) {
 }
 
 func readCurrentVersion() string {
-	data, err := os.ReadFile(filepath.Join("data", "current.json"))
+	data, err := os.ReadFile(filepath.Join(projectRoot(), "data", "current.json"))
 	if err != nil {
 		return ""
 	}

@@ -215,6 +215,13 @@ func findConfig() (string, error) {
 			}
 		}
 	}
+	root := projectRoot()
+	for _, name := range []string{"config.json", "smago.json"} {
+		p := filepath.Join(root, name)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
 	if home, err := os.UserHomeDir(); err == nil {
 		p := filepath.Join(home, ".config", "smago", "config.json")
 		if _, err := os.Stat(p); err == nil {

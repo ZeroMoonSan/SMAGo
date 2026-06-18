@@ -11,6 +11,51 @@ import (
 	"time"
 )
 
+// projectRoot returns the absolute path to the project root directory
+// (the one containing src/go.mod). It walks up from the executable's
+// directory, then from CWD, to find it.
+func projectRoot() string {
+	// Try relative to the executable first.
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for i := 0; i < 10; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "src", "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	// Fallback: walk up from CWD.
+	if cwd, err := os.Getwd(); err == nil {
+		dir := cwd
+		for i := 0; i < 10; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "src", "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+		_ = cwd
+	}
+	// Last resort: check common relative paths.
+	for _, candidate := range []string{".", "..", "../.."} {
+		if _, err := os.Stat(filepath.Join(candidate, "src", "go.mod")); err == nil {
+			abs, _ := filepath.Abs(candidate)
+			return abs
+		}
+	}
+	// Give up — return CWD and hope for the best.
+	cwd, _ := os.Getwd()
+	return cwd
+}
+
 func cmdSmokeTest() error {
 	log.SetOutput(os.Stderr)
 	log.SetPrefix("smoke: ")
@@ -69,27 +114,12 @@ func cmdSmokeTest() error {
 
 // findSourceRoot finds the directory containing go.mod.
 func findSourceRoot() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return "src"
+	root := projectRoot()
+	src := filepath.Join(root, "src")
+	if _, err := os.Stat(filepath.Join(src, "go.mod")); err == nil {
+		return src
 	}
-	dir := filepath.Dir(exe)
-	for i := 0; i < 10; i++ {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	for _, candidate := range []string{"src", ".", ".."} {
-		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
-			return candidate
-		}
-	}
-	return "src"
+	return root
 }
 
 func cmdUpgrade(args []string) error {
@@ -115,13 +145,14 @@ func cmdUpgrade(args []string) error {
 		source = findSourceRoot()
 	}
 
-	outDir := filepath.Join("data", "versions", version)
+	root := projectRoot()
+	outDir := filepath.Join(root, "data", "versions", version)
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
 	outPath := filepath.Join(outDir, "agent.exe")
 
-	sha, commitErr := gitCommitAll("upgrade: build " + version)
+	sha, commitErr := gitCommitAll("upgrade: build "+version)
 	if commitErr != nil {
 		log.Printf("upgrade: git commit failed (continuing): %v", commitErr)
 	} else {
@@ -141,6 +172,7 @@ func cmdUpgrade(args []string) error {
 
 	log.Printf("upgrade: smoke-testing new binary")
 	test := hiddenCmd(outPath, "smoke-test")
+	test.Dir = root
 	test.Stdout = os.Stdout
 	test.Stderr = os.Stderr
 	if err := test.Run(); err != nil {
@@ -163,6 +195,7 @@ func runSelfUpgrade(version string) (string, error) {
 		return "", err
 	}
 	cmd := hiddenCmd(exe, "upgrade", "--version="+version)
+	cmd.Dir = projectRoot()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -193,7 +226,8 @@ func cmdRollback(args []string) error {
 		source = findSourceRoot()
 	}
 
-	commitPath := filepath.Join("data", "versions", version, "commit.txt")
+	root := projectRoot()
+	commitPath := filepath.Join(root, "data", "versions", version, "commit.txt")
 	commitData, err := os.ReadFile(commitPath)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", commitPath, err)
@@ -220,7 +254,7 @@ func cmdRollback(args []string) error {
 	}
 	log.Printf("rollback: working tree reverted to %s", sha[:7])
 
-	outDir := filepath.Join("data", "versions", version)
+	outDir := filepath.Join(root, "data", "versions", version)
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -237,6 +271,7 @@ func cmdRollback(args []string) error {
 
 	log.Printf("rollback: smoke-testing new binary")
 	test := hiddenCmd(outPath, "smoke-test")
+	test.Dir = root
 	test.Stdout = os.Stdout
 	test.Stderr = os.Stderr
 	if err := test.Run(); err != nil {
@@ -263,6 +298,7 @@ func runSelfRollback(version string, force bool) (string, error) {
 		args = append(args, "--force")
 	}
 	cmd := hiddenCmd(exe, args...)
+	cmd.Dir = projectRoot()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
