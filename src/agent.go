@@ -291,6 +291,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 
 	a.recordTrace(chatID, fmt.Sprintf("→ %s\nmax=%d tools=%d", truncateLog(userText, 100), maxSteps, len(tools)))
 
+	emptyResponses := 0
 	for i := 0; i < maxSteps; i++ {
 		select {
 		case <-rs.stop:
@@ -350,18 +351,26 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		var toolLines []string
 
 		if len(resp.ToolCalls) == 0 {
-			if resp.Content == "" {
-				a.recordTrace(chatID, "empty response from LLM, retrying...")
-				_ = sess.Append(ChatMessage{Role: "assistant", Content: ""})
-				_ = sess.Append(ChatMessage{Role: "system", Content: "Your previous response was empty. You must respond with text or tool calls."})
+			if strings.TrimSpace(resp.Content) == "" {
+				emptyResponses++
+				if emptyResponses >= 3 {
+					a.recordTrace(chatID, "ERROR: 3 empty responses in a row, giving up")
+					a.saveDCPState(chatID, dcp)
+					return "ERROR: model returned 3 empty responses in a row", nil
+				}
+				a.recordTrace(chatID, fmt.Sprintf("empty response from LLM (attempt %d/3), retrying...", emptyResponses))
+				_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
+				_ = sess.Append(ChatMessage{Role: "system", Content: "ERROR: empty response. You MUST respond with either meaningful text or tool calls."})
 				continue
 			}
+			emptyResponses = 0
 			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content), resp.Content)
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
 			a.saveDCPState(chatID, dcp)
 			return resp.Content, nil
 		}
 
+		emptyResponses = 0
 		_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 
 		compressedThisStep := false
