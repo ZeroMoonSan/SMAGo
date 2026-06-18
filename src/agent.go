@@ -1135,7 +1135,11 @@ func (a *Agent) handleSwitchSession(chatID int64, text string) {
 	}
 	a.dcpStates[chatID] = NewDCPState()
 	a.saveDCPState(chatID, a.dcpStates[chatID])
-	sess, _ := a.store.GetActive(chatID)
+	sess, err := a.store.GetActive(chatID)
+	if err != nil {
+		a.send(chatID, "❌ "+err.Error())
+		return
+	}
 	a.send(chatID, fmt.Sprintf("✅ switched to: %s\n(%d messages)", name, sess.Len()))
 }
 

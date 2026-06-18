@@ -128,10 +128,9 @@ func (sess *Session) save() error {
 
 func (sess *Session) Truncate(keep int) error {
 	if keep < 0 || keep >= len(sess.messages) {
-		sess.messages = nil
-	} else {
-		sess.messages = sess.messages[len(sess.messages)-keep:]
+		return nil
 	}
+	sess.messages = sess.messages[len(sess.messages)-keep:]
 	return sess.save()
 }
 
