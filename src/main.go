@@ -119,11 +119,12 @@ func run() error {
 			me.Result.Username, me.Result.ID, me.Result.FirstName)
 	}
 
-	botCmds := buildBotCommands()
-	if err := tg.SetMyCommands(botCmds); err != nil {
+	// Clear any leftover bot menu from previous bots (e.g. OpenCode)
+	if err := tg.SetMyCommands([]BotCommand{}); err != nil {
+
 		log.Printf("warn: setMyCommands failed: %v", err)
 	} else {
-		log.Printf("telegram: ✓ registered %d bot commands", len(botCmds))
+		log.Printf("telegram: ✓ cleared bot menu")
 	}
 
 	tools := NewToolRegistry(cfg)
