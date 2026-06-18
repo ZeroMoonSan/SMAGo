@@ -38,10 +38,10 @@ type Agent struct {
 	maxSteps map[int64]int
 	verbose  bool
 	traceBuf map[int64][]string
-
+	pendingForceVersion string
+	pending          *pendingQueue
 	runMu               sync.Mutex
 	runs                map[int64]*runState
-	pendingForceVersion string
 	shellOverride       map[int64]ShellType
 	dcpStates           map[int64]*DCPState
 }
@@ -55,7 +55,7 @@ type injectedMsg struct {
 func NewAgent(cfg *Config, llm *LLM, store *Store, tg *Telegram, tools *ToolRegistry) *Agent {
 	return &Agent{
 		cfg: cfg, llm: llm, store: store, tg: tg, tools: tools,
-		inject: make(chan injectedMsg, 16), maxSteps: make(map[int64]int),
+		inject: make(chan injectedMsg, 16), maxSteps: make(map[int64]int), pending: newPendingQueue(),
 		traceBuf: make(map[int64][]string), runs: make(map[int64]*runState),
 		shellOverride: make(map[int64]ShellType),
 		dcpStates:     make(map[int64]*DCPState),
@@ -289,6 +289,9 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	cleanup := a.registerRun(chatID, rs)
 	defer cleanup()
 
+	if pendingText := a.drainPending(chatID); pendingText != "" {
+		_ = sess.Append(ChatMessage{Role: "user", Content: pendingText})
+	}
 	a.recordTrace(chatID, fmt.Sprintf("→ %s\nmax=%d tools=%d", truncateLog(userText, 100), maxSteps, len(tools)))
 
 	emptyResponses := 0
@@ -700,6 +703,8 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 				version := strings.TrimPrefix(data, "rollback:")
 				_ = a.tg.AnswerCallback(cq.ID, "rolling back to "+version)
 				a.runRollback(chatID, msgID, version, false)
+			case data == "pending-cancel":
+				a.handlePendingCancel(chatID, cq.ID)
 			case data == "rollback:force":
 				_ = a.tg.AnswerCallback(cq.ID, "force rollback")
 				a.runRollbackFromDirty(chatID, msgID)
@@ -747,7 +752,7 @@ func (a *Agent) RunLoop(ctx context.Context) error {
 		}
 
 		if rs := a.getRun(chatID); rs != nil && !isWhitelistedCommand(text) {
-			a.send(chatID, "⏳ task in progress — use /stop or /abort to interrupt")
+			a.sendQueued(chatID, text)
 			continue
 		}
 		switch {

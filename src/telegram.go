@@ -231,6 +231,44 @@ func (t *Telegram) SendButtons(chatID int64, text string, rows [][]InlineButton)
 	return nil
 }
 
+
+// SendButtonsWithID is like SendButtons but returns the sent message ID.
+func (t *Telegram) SendButtonsWithID(chatID int64, text string, rows [][]InlineButton) int64 {
+	if len(text) > 4000 {
+		text = text[:4000] + "\n\n[...truncated]"
+	}
+	v := url.Values{}
+	v.Set("chat_id", fmt.Sprintf("%d", chatID))
+	v.Set("text", mdToTelegramHTML(text))
+	v.Set("parse_mode", "HTML")
+	if len(rows) > 0 {
+		kb, _ := json.Marshal(map[string]any{"inline_keyboard": rows})
+		v.Set("reply_markup", string(kb))
+	}
+	req, err := http.NewRequest("POST", "https://api.telegram.org/bot"+t.token+"/sendMessage", strings.NewReader(v.Encode()))
+	if err != nil {
+		return 0
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			MessageID int64 `json:"message_id"`
+		} `json:"result"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if result.OK {
+		return result.Result.MessageID
+	}
+	return 0
+}
+
+
 func (t *Telegram) AnswerCallback(callbackID, text string) error {
 	v := url.Values{}
 	v.Set("callback_query_id", callbackID)
