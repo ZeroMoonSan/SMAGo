@@ -573,7 +573,8 @@ func (a *Agent) handleDCPCommand(chatID int64, text string) {
 
 func (a *Agent) RunLoop(ctx context.Context) error {
 	if a.cfg.TelegramChatID != 0 {
-		a.send(a.cfg.TelegramChatID, "🤖 SMAGo started. /models to pick, /help for commands.")
+		sha, _ := gitHead()
+		a.send(a.cfg.TelegramChatID, "🤖 SMAGo started. /models to pick, /help for commands.\nVersion: "+sha)
 	}
 
 	pollCh := make(chan *TGUpdate, 4)
