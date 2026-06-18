@@ -23,7 +23,7 @@ func (s *SelfModifyTool) Definition() ToolDef {
 			"properties": map[string]any{
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"list", "current", "upgrade", "rollback", "restart"},
+					"enum":        []string{"list", "current", "upgrade", "upgrade-resume", "rollback", "restart"},
 					"description": "What to do",
 				},
 				"version": map[string]any{
@@ -62,6 +62,9 @@ func (s *SelfModifyTool) Execute(ctx context.Context, args map[string]any) (stri
 		return s.actionCurrent()
 	case "upgrade":
 		return s.actionUpgrade(ctx, args)
+	case "upgrade-resume":
+		return s.actionUpgradeResume(ctx, args)
+
 	case "rollback":
 		return s.actionRollback(ctx, args)
 	case "restart":
@@ -118,6 +121,33 @@ func (s *SelfModifyTool) actionUpgrade(ctx context.Context, args map[string]any)
 	}
 	return fmt.Sprintf("upgrade %s sent to supervisor", version), nil
 }
+
+func (s *SelfModifyTool) actionUpgradeResume(ctx context.Context, args map[string]any) (string, error) {
+	version, _ := args["version"].(string)
+	if version == "" {
+		sha, err := gitHead()
+		if err != nil {
+			return "", fmt.Errorf("git HEAD: %w", err)
+		}
+		version = sha
+	}
+	chatID := ChatIDFromContext(ctx)
+	if chatID == 0 {
+		// fallback: try config
+		chatID = s.cfg.TelegramChatID
+	}
+	if err := saveResumeMarker(chatID, version); err != nil {
+		return "", fmt.Errorf("save resume marker: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if err := cmdUpgrade([]string{"--version=" + version}); err != nil {
+		return "", fmt.Errorf("upgrade-resume %s: %w", version, err)
+	}
+	return fmt.Sprintf("upgrade-resume %s sent to supervisor", version), nil
+}
+
 
 func (s *SelfModifyTool) actionRollback(ctx context.Context, args map[string]any) (string, error) {
 	version, _ := args["version"].(string)

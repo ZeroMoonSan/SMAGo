@@ -184,15 +184,8 @@ func truncateLog(s string, n int) string {
 }
 
 // formatToolCall renders a single tool call for verbose trace output.
-func formatToolCall(name string, args map[string]any, annotation string, resultLen int, toolErr error) string {
+func formatToolCall(name string, args map[string]any, resultLen int, toolErr error) string {
 	var b strings.Builder
-	if annotation != "" {
-		a := strings.TrimSpace(annotation)
-		if len(a) > 200 {
-			a = a[:200] + "…"
-		}
-		b.WriteString(a + "\n")
-	}
 	b.WriteString("**" + name + "**")
 	keys := sortedKeys(args)
 	for i, k := range keys {
@@ -357,7 +350,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 		var toolLines []string
 
 		if len(resp.ToolCalls) == 0 {
-			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content))
+			a.recordStep(chatID, i+1, maxSteps, usage, stepDur, nil, len(resp.Content), "")
 			_ = sess.Append(ChatMessage{Role: "assistant", Content: resp.Content})
 			a.saveDCPState(chatID, dcp)
 			return resp.Content, nil
@@ -426,7 +419,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					toolLines = append(toolLines, fmt.Sprintf("  🛑 %s cancelled", tc.Function.Name))
-					a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1)
+					a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1, "")
 					a.saveDCPState(chatID, dcp)
 					return "🛑 aborted.", nil
 				}
@@ -436,7 +429,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 					dcp.RecordErrorToolCall(tc.ID, tc.Function.Name, tc.Function.Arguments, sess.Len()-1)
 				}
 			}
-			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, resp.Content, len(out), toolErr))
+			toolLines = append(toolLines, formatToolCall(tc.Function.Name, args, len(out), toolErr))
 			_ = sess.Append(ChatMessage{Role: "tool", ToolCallID: tc.ID, Name: tc.Function.Name, Content: out})
 
 			if a.cfg.DCP.Enabled {
@@ -448,7 +441,7 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 				)
 			}
 		}
-		a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1)
+		a.recordStep(chatID, i+1, maxSteps, usage, stepDur, toolLines, -1, resp.Content)
 	}
 
 	a.recordTrace(chatID, fmt.Sprintf("✗ hit %d-step cap", maxSteps))
@@ -462,7 +455,11 @@ func (a *Agent) Handle(chatID int64, userText string) (string, error) {
 	return resp.Content, nil
 }
 
-func (a *Agent) recordStep(chatID int64, step, max int, usage *Usage, dur time.Duration, toolLines []string, textReplyLen int) {
+func (a *Agent) recordStep(chatID int64, step, max int, usage *Usage, dur time.Duration, toolLines []string, textReplyLen int, annotation string) {
+	if annotation != "" {
+		a.recordTrace(chatID, strings.TrimSpace(annotation))
+	}
+
 	in, out, total := 0, 0, 0
 	if usage != nil {
 		in, out, total = usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens
